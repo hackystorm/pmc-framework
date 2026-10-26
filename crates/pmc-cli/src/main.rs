@@ -1,0 +1,110 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+//! The `pmc` binary.
+//!
+//! One executable, no runtime dependencies, no Python. It trains, discovers
+//! and exports, which is enough for a local machine with nothing installed.
+
+use std::env;
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use pmc_core::{Json, Rng};
+use pmc_discovery::StateSpace;
+use pmc_train::{export_checkpoint, train, TrainConfig};
+
+fn flag(args: &[String], name: &str, fallback: f32) -> f32 {
+    for pair in args.windows(2) {
+        if pair[0] == name {
+            return pair[1].parse().unwrap_or(fallback);
+        }
+    }
+    fallback
+}
+
+fn option(args: &[String], name: &str) -> Option<String> {
+    for pair in args.windows(2) {
+        if pair[0] == name {
+            return Some(pair[1].clone());
+        }
+    }
+    None
+}
+
+fn usage() {
+    println!(
+        "pmc - PMC Framework trainer
+
+Usage:
+  pmc train    [--seed N] [--steps N] [--lr F] [--hidden N] [--keys N] [--out DIR]
+  pmc discover [--seed N] [--points N] [--dim N] [--k N]
+  pmc version
+"
+    );
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        usage();
+        return ExitCode::from(1);
+    }
+
+    match args[1].as_str() {
+        "train" => {
+            let config = TrainConfig {
+                seed: flag(&args, "--seed", 20261026.0) as u64,
+                steps: flag(&args, "--steps", 200.0) as usize,
+                learning_rate: flag(&args, "--lr", 0.05),
+                hidden: flag(&args, "--hidden", 32.0) as usize,
+                keys: flag(&args, "--keys", 16.0) as usize,
+            };
+            let (model, report) = train(&config);
+            let metrics = report.to_json();
+            println!("{}", metrics.to_string());
+
+            if let Some(directory) = option(&args, "--out") {
+                let path = PathBuf::from(directory);
+                if let Err(error) = export_checkpoint(&path, &model, &config, &metrics) {
+                    eprintln!("error: export failed: {}", error);
+                    return ExitCode::from(1);
+                }
+                println!("{}", Json::obj(vec![("exported_to", Json::str(path.display().to_string()))]).to_string());
+            }
+            ExitCode::SUCCESS
+        }
+        "discover" => {
+            let seed = flag(&args, "--seed", 20261026.0) as u64;
+            let points = flag(&args, "--points", 500.0) as usize;
+            let dim = flag(&args, "--dim", 8.0) as usize;
+            let k = flag(&args, "--k", 4.0) as usize;
+
+            let mut rng = Rng::new(seed);
+            let mut space = StateSpace::new(dim, k);
+            let mut novelty_total = 0.0f32;
+            for _ in 0..points {
+                let observation: Vec<f32> = (0..dim).map(|_| rng.normal()).collect();
+                let (_, distance) = space.observe(&observation);
+                novelty_total += distance;
+            }
+            let summary = Json::obj(vec![
+                ("points", Json::num(points as f64)),
+                (
+                    "mean_novelty",
+                    Json::num((novelty_total / points.max(1) as f32) as f64),
+                ),
+                ("space", space.to_json()),
+            ]);
+            println!("{}", summary.to_string());
+            ExitCode::SUCCESS
+        }
+        "version" => {
+            println!("pmc {} (artifact format {})", env!("CARGO_PKG_VERSION"), pmc_core::ARTIFACT_FORMAT_VERSION);
+            ExitCode::SUCCESS
+        }
+        _ => {
+            usage();
+            ExitCode::from(1)
+        }
+    }
+}

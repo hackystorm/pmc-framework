@@ -1,0 +1,17 @@
+[package]
+name = "pmc-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "C ABI for the PMC trainer, so the Python side can call it without a build dependency."
+
+[lib]
+name = "pmc_ffi"
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+pmc-core = { path = "../pmc-core" }
+pmc-train = { path = "../pmc-train" }

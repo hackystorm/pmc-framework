@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Rust
+crates/target/
+**/*.rs.bk
+
+# Workspaces and artifacts produced by running the framework
+workspace/
+workspaces/
+*.gguf
+*.bin
+sidecar/
+audit/
+backups/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local configuration
+.env
+.env.*
+config.local.*

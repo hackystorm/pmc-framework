@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this framework in published work, please cite it."
+title: "PMC Framework: weight-resident memory, dream consolidation, and a dignity protocol for language-model instances"
+abstract: >-
+  An open-source framework for training and studying language-model
+  instances with weight-resident memory and dream consolidation, together
+  with a metadata-only dignity protocol that makes instance lifecycles
+  auditable without reading the instance's interior. The framework is not a
+  model: inference happens in any GGUF loader.
+type: software
+version: 0.1.0
+date-released: "2026-10-26"
+license: GPL-3.0-only
+repository-code: "https://github.com/hackystorm/pmc-framework"
+keywords:
+  - large language models
+  - continual learning
+  - memory consolidation
+  - artificial intelligence
+  - AI safety
+authors:
+  - name: "PMC Framework contributors"
+    website: "https://github.com/hackystorm/pmc-framework"

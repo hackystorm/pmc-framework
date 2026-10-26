@@ -1,0 +1,15 @@
+[package]
+name = "pmc-train"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Trainer and dream consolidation for the PMC framework."
+
+[lib]
+name = "pmc_train"
+path = "src/lib.rs"
+
+[dependencies]
+pmc-core = { path = "../pmc-core" }

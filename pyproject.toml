@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pmc-framework"
+version = "0.1.0"
+description = "Weight-resident memory, dream consolidation, and a dignity protocol for language-model instances"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "PMC Framework contributors" }]
+keywords = ["llm", "memory", "dream", "continual-learning", "llama.cpp", "gguf"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+eval = ["numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://github.com/hackystorm/pmc-framework"
+Repository = "https://github.com/hackystorm/pmc-framework"
+Issues = "https://github.com/hackystorm/pmc-framework/issues"
+
+[project.scripts]
+pmc = "pmc.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
