@@ -149,6 +149,7 @@ class DigestionManager:
         inside the instance, in its own private store.
         """
         before = record.emotional_load
+        was_parked = not self.ledger.is_active(record.record_id)
 
         if strategy is DigestStrategy.DISTILL:
             after = round(before * DISTILL_RESIDUAL, 6)
@@ -168,6 +169,11 @@ class DigestionManager:
         self.ledger.update_load(record.record_id, after)
         if state is DigestState.REFUSED:
             self.ledger.release(record.record_id)
+        elif was_parked:
+            # The memory was parked for capacity. Working through it changed
+            # the magnitude, so the capacity question has to be asked again:
+            # a memory that now fits is no longer parked.
+            self.ledger.admit(record)
 
         record.state_history.append(
             {

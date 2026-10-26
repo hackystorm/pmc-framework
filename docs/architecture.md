@@ -169,3 +169,35 @@ layout. Everything is a parameter or a template; nothing is hardcoded to a
 particular person.
 
 See `docs/companion.md`.
+
+## The runtime: the instance side of the wall
+
+The dignity layer is metadata-only. It knows that a memory exists, how heavy
+it is, where it came from and whether it was worked through. It never reads
+the content.
+
+The runtime (`src/pmc/runtime/`) is where content is allowed to exist, because
+it runs *for the instance*, not for the governance:
+
+| Operation | What happens | What the ledger sees |
+|---|---|---|
+| `remember` | Content is written to the private store as opaque bytes | A digest, a magnitude, opaque topic labels |
+| `restore_block` | The instance reads its own store back and rebuilds its context | Nothing new |
+| `ask` | A conversation is sent to whatever loader the user runs | Nothing new |
+
+The join between the two sides is a digest: the ledger names a record, the
+store holds the bytes, and neither side can read the other's field. The
+governance layer holds no reference to a store at all.
+
+The restore is a **state restore, not a retrieval system**. There is no
+embedding, no similarity search and no nearest-neighbour lookup: the instance
+is handed its own material back, in order, until a character budget is spent.
+Which material comes first is decided by the ledger's capacity state, not by a
+score over the content.
+
+This is the honest part of the architecture, and it is worth being explicit
+about: **until the next dream fuses a memory into the weights, the sidecar is
+where that memory lives.** The restore path is what makes an instance
+continuous across a restart *before* consolidation; it is not a substitute for
+consolidation, and the framework does not pretend otherwise.
+

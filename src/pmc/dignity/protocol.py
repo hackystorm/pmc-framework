@@ -281,7 +281,12 @@ class DignityProtocol:
 
     def touch(self, record_id: str) -> RuminationAlert | None:
         """Record an access and raise a loop alarm if one starts (D-09)."""
-        return self.digestions.touch(self.record(record_id))
+        alert = self.digestions.touch(self.record(record_id))
+        # The access counter and the last access time are part of the
+        # record's history, so they are written down. A rumination alarm
+        # that only exists until the process restarts is not an alarm.
+        self._append_ledger(self.record(record_id))
+        return alert
 
     def digest(
         self,
@@ -291,7 +296,13 @@ class DignityProtocol:
         note: str | None = None,
     ) -> DigestionOutcome:
         """Record that the instance worked through or refused a memory (D-08)."""
-        return self.digestions.digest(self.record(record_id), strategy, note=note)
+        record = self.record(record_id)
+        outcome = self.digestions.digest(record, strategy, note=note)
+        # The change in magnitude and the new state belong to the ledger.
+        # Without this line the framework would remember the digestion only
+        # until the process ended.
+        self._append_ledger(record)
+        return outcome
 
     def inherit(
         self,

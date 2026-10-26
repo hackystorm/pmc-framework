@@ -75,6 +75,10 @@ pmc companion create --agent-name MyCompanion --workspace ./workspace --seed 202
 pmc instances --workspace ./workspace
 pmc journal  --workspace ./workspace --verify
 pmc audit    --workspace ./workspace
+
+# Talk to it, through any OpenAI-compatible loader you already run
+pmc runtime state --workspace ./workspace --model my-model
+pmc runtime ask   --workspace ./workspace --model my-model "who are you?"
 ```
 
 Everything the framework does is also available as a library:
@@ -120,12 +124,20 @@ similarity search, no nearest-neighbour lookup. It is a ledger plus an opaque
 store, and it exists because memory has to live somewhere between the moment
 it is learned and the moment it is fused.
 
+`src/pmc/runtime/` implements that side: it talks to any OpenAI-compatible
+loader over HTTP, writes content to the instance's private store, keeps only
+digests in the ledger, and hands the instance's own material back to it when
+the context is rebuilt. The governance layer holds no reference to a store
+and never reads the content.
+
 ## Repository layout
 
 ```
 src/pmc/dignity/     metadata-only governance: registry, ledger, digestion,
                      inheritance, welfare, private content store
 src/pmc/companion/   per-user companion builder
+src/pmc/runtime/     instance-side runtime: chat client, memory write, state
+                     restore into the context of any OpenAI-compatible loader
 src/pmc/eval/        recall, forgetting, calibration, false memory, rumination
 src/pmc/reference.py independent Python implementation of the trainer, used
                      as the oracle for the Rust/Python parity test
@@ -188,6 +200,8 @@ What exists and is tested:
 - the dignity layer, with all seventeen invariants enforced in code;
 - a tamper-evident journal with a verified hash chain;
 - the companion builder and CLI;
+- the sidecar runtime, which drives an instance against any OpenAI-compatible
+  loader and hands the instance its own state back after a restart;
 - the evaluation suite for memory metrics;
 - the Rust core, with a numerical parity test against the Python reference.
 
@@ -195,6 +209,9 @@ What does **not** exist yet:
 
 - a trained checkpoint with published weights;
 - the full dream pipeline end to end;
+- any measurement of *weight-resident* memory, because no consolidated
+  checkpoint exists yet: what has been measured so far is the sidecar restore
+  path, which is the other half of the same architecture;
 - the Kaggle notebook;
 - any claim, benchmark or paper about consciousness.
 

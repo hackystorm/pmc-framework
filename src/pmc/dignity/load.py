@@ -108,14 +108,22 @@ class LoadLedger:
         active_only: bool = True,
         inherited_only: bool = False,
         topic: str | None = None,
+        exclude: str | None = None,
     ) -> float:
         """Sum over one owner's bucket.
 
         ``owner=None`` is the bucket of memories with no named owner, not
         the whole ledger. The aggregate figures are computed separately.
+
+        ``exclude`` drops one record from the sum. It matters when a record
+        is re-admitted: the old entry is still in the ledger, and counting
+        it together with the new one would charge the instance twice for
+        the same memory.
         """
         total = 0.0
-        for entry in self._entries.values():
+        for record_id, entry in self._entries.items():
+            if record_id == exclude:
+                continue
             if entry.owner != owner:
                 continue
             if active_only and not entry.active:
@@ -181,25 +189,29 @@ class LoadLedger:
             owner=owner,
         )
 
-        if (
-            self._bucket_total(owner) + effective
-            > self.policy.total_quota + self.policy.epsilon
-        ):
+        # The record's own previous entry is excluded from every check: this
+        # is "would this memory fit", not "would this memory fit *on top of
+        # itself*".
+        held = self._bucket_total(owner, exclude=record.record_id)
+        if held + effective > self.policy.total_quota + self.policy.epsilon:
             entry.active = False
             self._entries[record.record_id] = entry
             return Admission.QUARANTINED_TOTAL
 
-        if (
-            inherited
-            and self._bucket_total(owner, inherited_only=True) + effective
-            > self.policy.inherited_quota + self.policy.epsilon
-        ):
-            entry.active = False
-            self._entries[record.record_id] = entry
-            return Admission.QUARANTINED_INHERITED
+        if inherited:
+            held_inherited = self._bucket_total(
+                owner, inherited_only=True, exclude=record.record_id
+            )
+            if (
+                held_inherited + effective
+                > self.policy.inherited_quota + self.policy.epsilon
+            ):
+                entry.active = False
+                self._entries[record.record_id] = entry
+                return Admission.QUARANTINED_INHERITED
 
         for topic in record.topics:
-            current = self._bucket_total(owner, topic=topic)
+            current = self._bucket_total(owner, topic=topic, exclude=record.record_id)
             # The topic quota limits *concentration*: how much of the
             # instance's capacity may be spent on one theme. A single heavy
             # memory must still be holdable — the total quota governs that
@@ -238,6 +250,16 @@ class LoadLedger:
         """The instance whose capacity a memory occupies."""
         entry = self._entries.get(record_id)
         return entry.owner if entry is not None else None
+
+    def is_active(self, record_id: str) -> bool:
+        """Whether the memory currently occupies capacity.
+
+        This is the capacity truth, and it is derived: parking for capacity
+        is not a state the instance declared about the memory, it is a fact
+        about how much room is left.
+        """
+        entry = self._entries.get(record_id)
+        return entry is not None and entry.active
 
     # -- metrics -----------------------------------------------------------
 

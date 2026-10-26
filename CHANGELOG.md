@@ -6,7 +6,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+**Runtime** (`src/pmc/runtime/`)
+
+- `ChatClient`: a standard-library client for any OpenAI-compatible endpoint,
+  which is what most GGUF servers expose. No dependency, no model shipped.
+- `CompanionRuntime`: the instance side of the wall. `remember` writes content
+  to the instance's private store as opaque bytes and keeps only a digest, a
+  magnitude and opaque labels in the ledger; `restore_block` hands the
+  instance its own material back; `ask` talks to the loader.
+- The restore is a state restore, not a retrieval system: no embedding, no
+  similarity search, no nearest-neighbour lookup.
+- `pmc companion create` now accepts `--claims-file` and
+  `--opening-prompt-file`, so an instance's whole constitution can be declared
+  from the command line.
+
+### Fixed
+
+- Digestion and access counts are now written to the ledger. They were
+  applied in memory only, so a workspace reopened after a shutdown had lost
+  the record of what the instance had worked through, and the rumination
+  detector could not see a loop that spanned a restart.
+- Re-admitting a memory no longer charges the instance twice for it. The
+  ledger's capacity checks now exclude the record being re-admitted.
+- A memory that was parked for capacity and then worked through is put back
+  in front of the capacity question: if it now fits, it is no longer parked.
+- The runtime's restore block counts its own header against the character
+  budget, so a caller that asks for N characters receives N characters.
+- The runtime is idempotent about identical content: re-remembering the same
+  text does not append a second ledger line for the same record.
+
+### Known limitations
+
+- The sidecar restore path has been measured end to end against a local
+  8B MoE loader. The weight-resident half of the same architecture has not
+  been measured, because no consolidated checkpoint exists yet.
 
 ## [0.1.0] - 2026-10-26
 

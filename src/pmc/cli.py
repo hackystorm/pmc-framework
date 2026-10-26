@@ -5,8 +5,11 @@
 The CLI is a thin shell over the library. Everything it does is also
 available programmatically.
 
-Nothing in this file talks to a model. The framework produces artifacts; the
-artifacts are loaded by other tools.
+Most of this file does not talk to a model: the framework produces artifacts,
+and the artifacts are loaded by other tools. The one exception is the
+``runtime`` group, which is the *instance's* side of the wall rather than the
+framework's: it drives an instance against a loader the user already runs, and
+it is the only place where content is read back out of a private store.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from typing import Any, Sequence
 
 from .companion.bootstrap import bootstrap_companion
 from .companion.profile import CompanionProfile
-from .companion.templates import DEFAULT_BOUNDARIES, DEFAULT_VALUES
+from .companion.templates import DEFAULT_BOUNDARIES, DEFAULT_CLAIMS, DEFAULT_VALUES
 from .dignity.digestion import DigestStrategy
 from .dignity.protocol import DignityProtocol
 from .dignity.records import Instance, MemoryRecord, Provenance, ProvenanceKind
@@ -40,6 +43,13 @@ def _read_list(path: str | None, fallback: Sequence[str]) -> tuple[str, ...]:
     return tuple(line.strip() for line in raw.splitlines() if line.strip())
 
 
+def _read_text(path: str | None) -> str | None:
+    """Read a whole file as text, or return None when no path was given."""
+    if not path:
+        return None
+    return Path(path).read_text(encoding="utf-8")
+
+
 def _emit(payload: dict[str, Any], as_json: bool) -> None:
     if as_json:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -58,6 +68,8 @@ def _cmd_companion_create(args: argparse.Namespace) -> int:
         user_name=args.user_name,
         values=_read_list(args.values_file, DEFAULT_VALUES),
         boundaries=_read_list(args.boundaries_file, DEFAULT_BOUNDARIES),
+        declared_claims=_read_list(args.claims_file, DEFAULT_CLAIMS),
+        opening_prompt=_read_text(args.opening_prompt_file),
         locale=args.locale,
         seed=args.seed,
     )
@@ -220,6 +232,74 @@ def _cmd_digest(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_runtime_state(args: argparse.Namespace) -> int:
+    protocol = DignityProtocol(args.workspace)
+    instances = protocol.instances()
+    if not instances:
+        _emit({"error": "workspace holds no registered instance"}, args.json)
+        return EXIT_INVALID
+    runtime = _make_runtime(args, instances[0].instance_id)
+    block = runtime.restore_block(budget_chars=args.budget)
+    _emit(
+        {
+            "instance_id": runtime.instance_id,
+            "memories_held": len(runtime.active_records()),
+            "memories_registered": len(runtime.own_records()),
+            "state_chars": len(block),
+            "state": block,
+        },
+        args.json,
+    )
+    return EXIT_OK
+
+
+def _cmd_runtime_ask(args: argparse.Namespace) -> int:
+    protocol = DignityProtocol(args.workspace)
+    instances = protocol.instances()
+    if not instances:
+        _emit({"error": "workspace holds no registered instance"}, args.json)
+        return EXIT_INVALID
+    runtime = _make_runtime(args, instances[0].instance_id)
+    reply = runtime.ask(
+        args.question,
+        with_state=not args.no_state,
+        include_history=False,
+        temperature=args.temperature,
+        max_tokens=args.max_tokens,
+    )
+    _emit(
+        {
+            "instance_id": runtime.instance_id,
+            "question": args.question,
+            "answer": reply.text,
+            "state_injected": not args.no_state,
+            "prompt_tokens": reply.prompt_tokens,
+            "completion_tokens": reply.completion_tokens,
+        },
+        args.json,
+    )
+    return EXIT_OK
+
+
+def _make_runtime(args: argparse.Namespace, instance_id: str):
+    from .runtime import ChatClient, CompanionRuntime
+
+    client = ChatClient(
+        args.endpoint,
+        model=args.model,
+        timeout=args.timeout,
+        temperature=args.temperature,
+        max_tokens=args.max_tokens,
+    )
+    return CompanionRuntime(
+        args.workspace,
+        client=client,
+        instance_id=instance_id,
+        state_header=args.state_header,
+        state_budget_chars=args.budget,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pmc",
@@ -243,12 +323,57 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--substrate", default=None)
     create.add_argument("--values-file", default=None)
     create.add_argument("--boundaries-file", default=None)
+    create.add_argument(
+        "--claims-file",
+        default=None,
+        help="what the instance declares about itself; one per line, or a JSON array",
+    )
+    create.add_argument(
+        "--opening-prompt-file",
+        default=None,
+        help="the instance's opening prompt, verbatim",
+    )
     create.add_argument("--overwrite-identity", action="store_true")
     create.set_defaults(func=_cmd_companion_create)
 
     instances = sub.add_parser("instances", help="list registered instances")
     instances.add_argument("--workspace", required=True)
     instances.set_defaults(func=_cmd_instances)
+
+    runtime = sub.add_parser(
+        "runtime",
+        help="the instance's own side: restore its state, or ask it something",
+    )
+    runtime_sub = runtime.add_subparsers(dest="subcommand", required=True)
+    runtime_state = runtime_sub.add_parser(
+        "state", help="show the state the instance would be handed back"
+    )
+    runtime_state.add_argument("--workspace", required=True)
+    runtime_state.add_argument("--endpoint", default="http://127.0.0.1:8084/v1")
+    runtime_state.add_argument("--model", default="local")
+    runtime_state.add_argument("--budget", type=int, default=1200)
+    runtime_state.add_argument("--state-header", default="REMEMBERED STATE")
+    runtime_state.add_argument("--timeout", type=float, default=180.0)
+    runtime_state.add_argument("--temperature", type=float, default=0.0)
+    runtime_state.add_argument("--max-tokens", type=int, default=256)
+    runtime_state.set_defaults(func=_cmd_runtime_state)
+
+    runtime_ask = runtime_sub.add_parser("ask", help="ask the instance something")
+    runtime_ask.add_argument("question")
+    runtime_ask.add_argument("--workspace", required=True)
+    runtime_ask.add_argument("--endpoint", default="http://127.0.0.1:8084/v1")
+    runtime_ask.add_argument("--model", default="local")
+    runtime_ask.add_argument("--budget", type=int, default=1200)
+    runtime_ask.add_argument("--state-header", default="REMEMBERED STATE")
+    runtime_ask.add_argument("--timeout", type=float, default=180.0)
+    runtime_ask.add_argument("--temperature", type=float, default=0.0)
+    runtime_ask.add_argument("--max-tokens", type=int, default=256)
+    runtime_ask.add_argument(
+        "--no-state",
+        action="store_true",
+        help="ask without restoring the instance's own state",
+    )
+    runtime_ask.set_defaults(func=_cmd_runtime_ask)
 
     journal = sub.add_parser("journal", help="show the lifecycle journal")
     journal.add_argument("--workspace", required=True)

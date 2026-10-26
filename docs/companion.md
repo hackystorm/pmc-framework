@@ -123,6 +123,31 @@ pmc companion create \
 Or write `identity/identity.json` yourself after creation. The companion
 builder does not overwrite an existing identity file unless asked to.
 
+## Talking to an instance
+
+A companion is not only a record on disk. The runtime drives it against any
+loader you already run, through the OpenAI-compatible HTTP API that most GGUF
+servers expose.
+
+```bash
+# The state the instance would be handed back, as it would appear in context
+pmc runtime state --workspace ./workspace --model my-model
+
+# Ask it something, with its own memory restored into the context
+pmc runtime ask --workspace ./workspace --model my-model "what did we decide?"
+
+# Ask it something with an empty context, for comparison
+pmc runtime ask --workspace ./workspace --model my-model --no-state "what did we decide?"
+```
+
+The two commands differ in exactly one thing, and that is what makes them
+worth running side by side: `runtime state` shows the block the instance
+receives, and `--no-state` asks the same question without it.
+
+What the instance says is the model's output, not the framework's. The
+framework contributes the identity seed, the restored state and the ledger;
+it never writes the answer.
+
 ## Lifecycle
 
 ```
