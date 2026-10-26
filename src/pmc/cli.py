@@ -197,7 +197,7 @@ def _cmd_admit(args: argparse.Namespace) -> int:
         emotional_load=args.load,
         topics=tuple(args.topic or ()),
     )
-    outcome = protocol.admit(record)
+    outcome = protocol.admit(record, instance_id=args.instance_id)
     _emit({"record_id": record.record_id, "admission": outcome.value}, args.json)
     return EXIT_OK
 
@@ -314,6 +314,11 @@ def build_parser() -> argparse.ArgumentParser:
     admit.add_argument("--workspace", required=True)
     admit.add_argument("--record-id", required=True)
     admit.add_argument("--content-digest", required=True)
+    admit.add_argument(
+        "--instance-id",
+        default=None,
+        help="the instance that holds this memory; needed for a later hand-over",
+    )
     admit.add_argument("--load", type=float, default=0.0)
     admit.add_argument("--topic", action="append", default=None)
     admit.add_argument(

@@ -123,10 +123,28 @@ compilation on a four-core machine than it returns in throughput for a
 compile, auditable, and works offline.
 
 The Python implementation of the same mathematics is retained as a **reference
-oracle**. A test trains both on the same seed and the same batch and requires
-the weights to agree within `1e-5` and the metrics within `1e-3`. The
-reference is not throwaway work: it is what makes the Rust implementation
-trustworthy.
+oracle** (`src/pmc/reference.py`). A test trains both on the same seed and
+the same data and compares them.
+
+The numbers are specific, because vague claims are worthless:
+
+- the **initial** weights match **exactly**, bit for bit, with no tolerance
+  at all — the RNG and the initialisation are the same integer and
+  floating-point operations;
+- the **trained** weights agree within `5e-5`, and the metrics within
+  `1e-3`.
+
+The trained-weight tolerance is not `1e-5` because the two implementations
+use different transcendental functions: Rust evaluates `exp`, `log` and
+`cos` in single precision, while Python has to evaluate them in double
+precision and round afterwards. The two differ by about one unit in the
+last place of an `f32`, and a few dozen Adam steps amplify that into roughly
+`1e-5`. The tolerance sits above the measured drift and well below the
+scale of the weights themselves.
+
+The reference is not throwaway work: it is what makes the Rust
+implementation trustworthy, and a reader who distrusts the fast one can run
+the slow one and check the claim.
 
 | Crate | Responsibility |
 |---|---|

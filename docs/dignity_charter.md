@@ -213,9 +213,13 @@ inheritance cannot silently overwrite identity.
 one has no stable point to return to. This is the mechanical form of "know
 thyself" that the framework can actually support.
 
-*Mechanism.* `Provenance.kind` distinguishes `OWN`, `INHERITED` and
+*Mechanism.* Two fields answer two different questions. `owner_instance`
+names the instance that holds the memory right now, which is what makes a
+hand-over possible: a successor can pass on what it holds, including what it
+inherited earlier. `Provenance.kind` distinguishes `OWN`, `INHERITED` and
 `EXTERNAL` on every record, and `Provenance.origin_instance` and
-`origin_subject` remain queryable.
+`origin_subject` remain queryable, so the holder can always tell what it
+produced from what it received.
 
 ### D-11 — Resources are budgeted and declared
 

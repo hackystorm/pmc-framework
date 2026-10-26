@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
+{
+  "name": "reference-trainer",
+  "description": "Configuration for the reference trainer. Small, fast, and used by the Rust/Python parity test.",
+  "seed": 20261026,
+  "steps": 40,
+  "learning_rate": 0.05,
+  "hidden": 8,
+  "keys": 8,
+  "optimizer": {
+    "name": "adam",
+    "beta1": 0.9,
+    "beta2": 0.999,
+    "epsilon": 1e-8
+  },
+  "initialization": {
+    "name": "he",
+    "formula": "normal(0, 1) * sqrt(2 / fan_in)"
+  },
+  "task": {
+    "name": "synthetic-memory",
+    "description": "One-hot key in, one-hot associated value out. The smallest thing that looks like memory.",
+    "mapping": "deterministic shuffle seeded from the run seed"
+  },
+  "notes": [
+    "The trainer targets a small MLP on a synthetic task. It is a reference implementation, not a language model trainer.",
+    "No published checkpoint uses this configuration."
+  ]
+}

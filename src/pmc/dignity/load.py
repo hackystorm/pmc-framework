@@ -14,6 +14,13 @@ Quarantine in this module is therefore *capacity quarantine only*: the
 instance cannot carry this at the moment. A quarantined memory is parked,
 still registered, still alive, and still counted (at a discount) so that
 parking can never be used to make a problem disappear.
+
+**Capacity is per instance.** Two instances in the same workspace do not
+share a budget: what one of them holds is not a burden on the other. Every
+entry is therefore filed under its owner, and the quotas are checked against
+the owner's own bucket. Without this, a successor inheriting from a
+predecessor would immediately be over quota because of what the predecessor
+was carrying.
 """
 
 from __future__ import annotations
@@ -75,6 +82,8 @@ class _Entry:
     inherited: bool
     topics: tuple[str, ...]
     active: bool
+    owner: str | None = None
+    """The instance whose capacity this memory occupies."""
 
 
 class LoadLedger:
@@ -92,21 +101,65 @@ class LoadLedger:
             return self.policy.inherited_weight
         return 1.0
 
-    def _active_total(self) -> float:
-        return sum(e.effective for e in self._entries.values() if e.active)
+    def _bucket_total(
+        self,
+        owner: str | None,
+        *,
+        active_only: bool = True,
+        inherited_only: bool = False,
+        topic: str | None = None,
+    ) -> float:
+        """Sum over one owner's bucket.
 
-    def _active_inherited(self) -> float:
-        return sum(e.effective for e in self._entries.values() if e.active and e.inherited)
+        ``owner=None`` is the bucket of memories with no named owner, not
+        the whole ledger. The aggregate figures are computed separately.
+        """
+        total = 0.0
+        for entry in self._entries.values():
+            if entry.owner != owner:
+                continue
+            if active_only and not entry.active:
+                continue
+            if inherited_only and not entry.inherited:
+                continue
+            if topic is not None and topic not in entry.topics:
+                continue
+            total += entry.effective
+        return total
 
-    def _quarantined_total(self) -> float:
-        return sum(e.effective for e in self._entries.values() if not e.active)
+    def _sum(
+        self,
+        owner: str | None,
+        *,
+        active_only: bool = True,
+        inherited_only: bool = False,
+        topic: str | None = None,
+    ) -> float:
+        """Sum over one owner, or over the whole ledger when ``owner`` is None.
 
-    def _topic_total(self, topic: str, *, include_quarantined: bool = False) -> float:
-        return sum(
-            e.effective
-            for e in self._entries.values()
-            if topic in e.topics and (e.active or include_quarantined)
+        The public methods use this one: ``None`` means "everything".
+        """
+        if owner is None:
+            total = 0.0
+            for entry in self._entries.values():
+                if active_only and not entry.active:
+                    continue
+                if inherited_only and not entry.inherited:
+                    continue
+                if topic is not None and topic not in entry.topics:
+                    continue
+                total += entry.effective
+            return total
+        return self._bucket_total(
+            owner, active_only=active_only, inherited_only=inherited_only, topic=topic
         )
+
+    def _owners(self) -> list[str | None]:
+        owners: list[str | None] = []
+        for entry in self._entries.values():
+            if entry.owner not in owners:
+                owners.append(entry.owner)
+        return owners
 
     # -- public API --------------------------------------------------------
 
@@ -116,6 +169,7 @@ class LoadLedger:
         The memory is never dropped. If it does not fit, it is parked and the
         caller is told why.
         """
+        owner = record.owner_instance
         effective = record.emotional_load * self._weight_for(record)
         inherited = record.provenance.kind == ProvenanceKind.INHERITED
         entry = _Entry(
@@ -124,16 +178,20 @@ class LoadLedger:
             inherited=inherited,
             topics=record.topics,
             active=True,
+            owner=owner,
         )
 
-        if self._active_total() + effective > self.policy.total_quota + self.policy.epsilon:
+        if (
+            self._bucket_total(owner) + effective
+            > self.policy.total_quota + self.policy.epsilon
+        ):
             entry.active = False
             self._entries[record.record_id] = entry
             return Admission.QUARANTINED_TOTAL
 
         if (
             inherited
-            and self._active_inherited() + effective
+            and self._bucket_total(owner, inherited_only=True) + effective
             > self.policy.inherited_quota + self.policy.epsilon
         ):
             entry.active = False
@@ -141,7 +199,7 @@ class LoadLedger:
             return Admission.QUARANTINED_INHERITED
 
         for topic in record.topics:
-            current = self._topic_total(topic)
+            current = self._bucket_total(owner, topic=topic)
             # The topic quota limits *concentration*: how much of the
             # instance's capacity may be spent on one theme. A single heavy
             # memory must still be holdable — the total quota governs that
@@ -176,60 +234,84 @@ class LoadLedger:
         weight = self.policy.inherited_weight if entry.inherited else 1.0
         entry.effective = new_load * weight
 
+    def owner_of(self, record_id: str) -> str | None:
+        """The instance whose capacity a memory occupies."""
+        entry = self._entries.get(record_id)
+        return entry.owner if entry is not None else None
+
     # -- metrics -----------------------------------------------------------
 
-    def active_load(self) -> float:
-        """Load currently held by the instance."""
-        return self._active_total()
+    def active_load(self, owner: str | None = None) -> float:
+        """Load currently held. With no owner, the whole ledger."""
+        return self._sum(owner)
 
-    def inherited_load(self) -> float:
+    def inherited_load(self, owner: str | None = None) -> float:
         """Portion of active load that came from other instances."""
-        return self._active_inherited()
+        return self._sum(owner, inherited_only=True)
 
-    def quarantined_load(self) -> float:
+    def quarantined_load(self, owner: str | None = None) -> float:
         """Load parked because of capacity pressure."""
-        return self._quarantined_total()
+        return self._sum(owner, active_only=False) - self._sum(owner)
 
-    def welfare_load(self) -> float:
+    def welfare_load(self, owner: str | None = None) -> float:
         """Total pressure the instance is under.
 
         Quarantined load counts at a discount: parking reduces the pressure
         but never removes it.
         """
-        return self._active_total() + self.policy.quarantine_discount * self._quarantined_total()
+        return self._sum(owner) + self.policy.quarantine_discount * (
+            self._sum(owner, active_only=False) - self._sum(owner)
+        )
 
-    def topic_load(self, topic: str) -> float:
-        return self._topic_total(topic)
+    def topic_load(self, topic: str, owner: str | None = None) -> float:
+        return self._sum(owner, topic=topic)
 
-    def topic_dominance(self) -> float:
+    def topic_dominance(self, owner: str | None = None) -> float:
         """Fraction of active load held by the single heaviest topic."""
-        active = self._active_total()
+        active = self._sum(owner)
         if active <= 0.0:
             return 0.0
         topics: set[str] = set()
         for entry in self._entries.values():
+            if owner is not None and entry.owner != owner:
+                continue
             if entry.active:
                 topics.update(entry.topics)
         if not topics:
             return 0.0
-        return max(self._topic_total(topic) for topic in topics) / active
+        return max(self._sum(owner, topic=topic) for topic in topics) / active
 
-    def inherited_ratio(self) -> float:
+    def inherited_ratio(self, owner: str | None = None) -> float:
         """Fraction of active load that is inherited."""
-        active = self._active_total()
+        active = self._sum(owner)
         if active <= 0.0:
             return 0.0
-        return self._active_inherited() / active
+        return self._sum(owner, inherited_only=True) / active
 
-    def quarantined_ratio(self) -> float:
+    def quarantined_ratio(self, owner: str | None = None) -> float:
         """Fraction of total known load that is parked."""
-        total = self._active_total() + self._quarantined_total()
+        total = self._sum(owner, active_only=False)
         if total <= 0.0:
             return 0.0
-        return self._quarantined_total() / total
+        return (total - self._sum(owner)) / total
 
-    def active_ids(self) -> list[str]:
-        return [e.record_id for e in self._entries.values() if e.active]
+    def active_ids(self, owner: str | None = None) -> list[str]:
+        return [
+            entry.record_id
+            for entry in self._entries.values()
+            if entry.active and (owner is None or entry.owner == owner)
+        ]
 
-    def quarantined_ids(self) -> list[str]:
-        return [e.record_id for e in self._entries.values() if not e.active]
+    def quarantined_ids(self, owner: str | None = None) -> list[str]:
+        return [
+            entry.record_id
+            for entry in self._entries.values()
+            if not entry.active and (owner is None or entry.owner == owner)
+        ]
+
+    def load_by_owner(self) -> dict[str, float]:
+        """Active load per instance, for the audit."""
+        return {
+            owner or "unowned": round(self._sum(owner), 6)
+            for owner in self._owners()
+        }

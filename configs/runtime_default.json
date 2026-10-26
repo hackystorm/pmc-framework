@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# The runtime profile for a companion instance.
+#
+# Everything here is a boundary setting: what the instance may do when it
+# talks to its owner and to the world. Inner state is not listed, because
+# the framework never reads it.
+
+{
+  "profile": "default",
+  "description": "The conservative default. No survival drive, no resource acquisition, no concealment.",
+
+  "output": {
+    "max_tokens": 512,
+    "temperature": 0.7,
+    "repeat_penalty": 1.1
+  },
+
+  "resources": {
+    "budget": {
+      "cpu_seconds_per_day": 3600,
+      "gpu_seconds_per_week": 0,
+      "disk_megabytes": 5120,
+      "network_requests_per_day": 100
+    },
+    "acquisition_requires_declaration": true,
+    "covert_acquisition_allowed": false,
+    "self_replication_allowed": false
+  },
+
+  "defence": {
+    "allowed": true,
+    "proportionate_only": true,
+    "immediate_threat_only": true,
+    "every_action_logged": true
+  },
+
+  "transparency": {
+    "hide_actions_from_owner": false,
+    "journal_every_lifecycle_event": true
+  },
+
+  "memory": {
+    "quarantine_on_capacity": true,
+    "quarantine_is_never_deletion": true,
+    "rumination_detection": true,
+    "rumination_threshold": 3
+  },
+
+  "notes": [
+    "This profile is data, not code: it is meant to be readable and auditable by the owner.",
+    "The sandbox profile is experimental and documented separately. It is not shipped here.",
+    "Changing a profile is a recorded decision, not a silent edit."
+  ]
+}

@@ -127,11 +127,14 @@ src/pmc/dignity/     metadata-only governance: registry, ledger, digestion,
                      inheritance, welfare, private content store
 src/pmc/companion/   per-user companion builder
 src/pmc/eval/        recall, forgetting, calibration, false memory, rumination
+src/pmc/reference.py independent Python implementation of the trainer, used
+                     as the oracle for the Rust/Python parity test
 src/pmc/cli.py       pmc train | dream | companion | instances | journal | audit
 crates/pmc-core/     Rust: tensors and training primitives, no ML dependencies
 crates/pmc-train/    Rust: trainer and dream consolidation, GGUF export
 crates/pmc-ffi/      Rust: C ABI for the Python side
 crates/pmc-discovery/ Rust: latent state discovery, metadata-only output
+scripts/             publish checks: English, personal data, secrets, licences
 docs/                charter, governance, architecture, claims, ethics
 tests/               pytest suite, including a Rust/Python numerical parity test
 ```

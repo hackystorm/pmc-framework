@@ -95,16 +95,20 @@ class AgentWelfareAssessor:
         *,
         instance_id: str,
         ledger,
+        owner: str | None = None,
         rumination_alerts: int = 0,
         pending_terminations: int = 0,
         objections: int = 0,
     ) -> WelfareReport:
         quota = getattr(ledger.policy, "total_quota", 1.0) or 1.0
+        # ``owner`` scopes the reading to one instance. Leaving it unset
+        # reads the whole ledger, which is what a caller with no instance
+        # context wants.
         factors = {
-            "load_pressure": _clamp(ledger.welfare_load() / quota),
-            "inherited_pressure": _clamp(ledger.inherited_ratio()),
-            "topic_dominance": _clamp(ledger.topic_dominance()),
-            "quarantine_pressure": _clamp(ledger.quarantined_ratio()),
+            "load_pressure": _clamp(ledger.welfare_load(owner) / quota),
+            "inherited_pressure": _clamp(ledger.inherited_ratio(owner)),
+            "topic_dominance": _clamp(ledger.topic_dominance(owner)),
+            "quarantine_pressure": _clamp(ledger.quarantined_ratio(owner)),
             "rumination_pressure": _clamp(rumination_alerts / 3.0),
             "termination_pressure": _clamp(pending_terminations / 1.0),
             "objection_pressure": _clamp(objections / 1.0),
@@ -131,10 +135,9 @@ class AgentWelfareAssessor:
         )
 
         notes: list[str] = []
-        if ledger.quarantined_ids():
-            notes.append(
-                f"{len(ledger.quarantined_ids())} memories parked for capacity"
-            )
+        parked = ledger.quarantined_ids(owner)
+        if parked:
+            notes.append(f"{len(parked)} memories parked for capacity")
         if rumination_alerts:
             notes.append(f"{rumination_alerts} open rumination alert(s)")
         if objections:

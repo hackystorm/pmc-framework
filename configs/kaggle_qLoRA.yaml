@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# The planned Kaggle configuration for the consolidation backend.
+#
+# STATUS: NOT IMPLEMENTED. This file documents the intended settings so
+# that the hardware plan is checkable rather than aspirational. The Kaggle
+# notebook does not exist yet, and nothing in this repository runs on Kaggle.
+
+target:
+  backend: "adapter_lora"
+  notes: >
+    Backend A (adapter/LoRA) is the default: it works with any base model
+    and any GGUF loader, and it fits the hardware below. Backend B (in-model
+    fast weights) needs a 24 GB card and is the research path.
+
+base_model:
+  id: "liquidation/lfm2.5-8b-a1b"
+  notes: "Confirm the identifier before use; the model must be loadable in 4-bit."
+
+hardware:
+  accelerator: "T4"
+  count: 2
+  vram_gb: 16
+  disk_gb: 20
+  notes: "Kaggle sessions are ephemeral. Everything worth keeping must be exported."
+
+quantisation:
+  method: "bitsandbytes-nf4"
+  double_quant: true
+  compute_dtype: "float16"
+  notes: "No BF16: the T4 does not support it. No FlashAttention-2: it is not worth the build time here."
+
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+
+training:
+  epochs: 3
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 0.0002
+  lr_scheduler: "cosine"
+  warmup_ratio: 0.03
+  max_seq_length: 2048
+  gradient_checkpointing: true
+  optim: "paged_adamw_8bit"
+  seed: 20261026
+
+dream:
+  schedule:
+    micro_dream: "end of session"
+    nrem: "nightly"
+    rem: "twice weekly"
+    deep_dream: "weekly"
+  replay:
+    real_trace_ratio: 0.8
+    filtered_counterfactual_ratio: 0.2
+    pure_generative_ratio: 0.0
+    notes: >
+      Purely self-generated replay is a model-collapse engine. The framework
+      does not offer it, and the ratio above is zero on purpose.
+  gate:
+    recall_regression_tolerance: 0.02
+    min_new_recall_gain: 0.0
+    max_interference: 0.05
+    max_calibration_drift: 0.02
+    identity_stability_required: true
+    max_false_memory_rate: 0.05
+    on_failure: "rollback"
+    notes: "A failed dream is rolled back, and the rollback is a journal event."
+
+export:
+  artifacts:
+    - "adapter.safetensors"
+    - "model.gguf"
+    - "sidecar/ledger.jsonl"
+    - "sidecar/journal.jsonl"
+    - "model_card.md"
+    - "manifest.json"
+  manifest_contains_digests: true

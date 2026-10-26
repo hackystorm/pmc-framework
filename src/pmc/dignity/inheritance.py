@@ -112,10 +112,15 @@ def inherit_records(
         inherited = MemoryRecord(
             record_id=new_id,
             content_digest=record.content_digest,
+            owner_instance=target.instance_id,
             provenance=Provenance(
                 kind=ProvenanceKind.INHERITED,
                 origin_instance=source.instance_id,
-                origin_subject=record.provenance.origin_subject or source.instance_id,
+                origin_subject=(
+                    record.owner_instance
+                    or record.provenance.origin_subject
+                    or source.instance_id
+                ),
                 inherited_at=utcnow_iso(),
                 transfer_id=transfer_id,
             ),

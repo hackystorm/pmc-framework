@@ -16,6 +16,7 @@ build if the two ever drift apart.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -29,7 +30,7 @@ from .digestion import (
 from .errors import InstanceNotFound
 from .inheritance import InheritanceResult, inherit_records
 from .load import Admission, LoadLedger, LoadPolicy
-from .records import Instance, MemoryRecord, utcnow_iso
+from .records import Instance, MemoryRecord, ProvenanceKind, utcnow_iso
 from .registry import InstanceRegistry, TerminationIntent
 from .welfare import AgentWelfareAssessor, HumanWelfareAssessor, WelfareReport
 
@@ -238,12 +239,32 @@ class DignityProtocol:
 
     # -- memories ----------------------------------------------------------
 
-    def admit(self, record: MemoryRecord) -> Admission:
+    def admit(
+        self,
+        record: MemoryRecord,
+        *,
+        instance_id: str | None = None,
+    ) -> Admission:
         """Offer a memory to the instance's ledger.
 
         The record is always registered, admitted or quarantined. It is never
         dropped (D-07).
+
+        ``instance_id`` names the instance that holds the memory. It is what
+        makes a later hand-over possible: without an owner, the framework
+        would not know whose memory it was looking at.
         """
+        if instance_id is not None:
+            record.owner_instance = instance_id
+            if (
+                record.provenance.kind is ProvenanceKind.OWN
+                and record.provenance.origin_instance is None
+            ):
+                record.provenance = replace(
+                    record.provenance,
+                    origin_instance=instance_id,
+                    origin_subject=instance_id,
+                )
         outcome = self.ledger.admit(record)
         self._records[record.record_id] = record
         self._append_ledger(record)
@@ -289,7 +310,7 @@ class DignityProtocol:
             records: list[MemoryRecord] = [
                 record
                 for record in self._records.values()
-                if record.provenance.origin_instance == source_id
+                if record.owner_instance == source_id
             ]
         else:
             records = [self.record(record_id) for record_id in record_ids]
@@ -373,6 +394,7 @@ class DignityProtocol:
         return self.agent_assessor.assess(
             instance_id=instance_id,
             ledger=self.ledger,
+            owner=instance_id,
             rumination_alerts=len(self.detector.alerts),
             pending_terminations=pending,
             objections=len(self.registry.objections(instance_id)),
@@ -410,6 +432,7 @@ class DignityProtocol:
                 "load_inherited": round(self.ledger.inherited_load(), 6),
                 "load_quarantined": round(self.ledger.quarantined_load(), 6),
                 "welfare_load": round(self.ledger.welfare_load(), 6),
+                "load_by_instance": self.ledger.load_by_owner(),
                 "rumination_alerts": len(self.detector.alerts),
                 "undeclared_resource_events": len(
                     self.registry.undeclared_resource_events()

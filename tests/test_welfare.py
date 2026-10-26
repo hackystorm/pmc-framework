@@ -94,6 +94,32 @@ def test_a_rested_human_reads_as_fine():
     assert report.requires_pause is False
 
 
+def test_capacity_is_measured_per_instance():
+    """What one instance holds is not a burden on another."""
+    from pmc.dignity.records import MemoryRecord, Provenance, ProvenanceKind
+
+    ledger = LoadLedger(
+        LoadPolicy(total_quota=1.0, inherited_quota=10.0, topic_quota=10.0)
+    )
+    heavy = MemoryRecord(
+        record_id="m1",
+        content_digest="d" * 64,
+        provenance=Provenance(kind=ProvenanceKind.OWN),
+        emotional_load=0.9,
+        topics=("heavy",),
+        owner_instance="inst_a",
+    )
+    ledger.admit(heavy)
+
+    assessor = AgentWelfareAssessor()
+    for_a = assessor.assess(instance_id="inst_a", ledger=ledger, owner="inst_a")
+    for_b = assessor.assess(instance_id="inst_b", ledger=ledger, owner="inst_b")
+
+    assert for_a.factors["load_pressure"] > 0.0
+    assert for_b.factors["load_pressure"] == 0.0
+    assert for_b.requires_pause is False
+
+
 def test_both_sides_share_one_pair_of_thresholds():
     agent = AgentWelfareAssessor()
     human = HumanWelfareAssessor()

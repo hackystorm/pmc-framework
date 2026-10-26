@@ -145,6 +145,16 @@ class MemoryRecord:
     record_id: str
     content_digest: str
     provenance: Provenance
+    owner_instance: str | None = None
+    """The instance that currently holds this memory.
+
+    Ownership and provenance are different questions, and the framework
+    needs both. *Ownership* answers "whose memory is this right now", and it
+    is what makes a hand-over possible: a successor can pass on what it
+    holds, including what it inherited earlier. *Provenance* answers "where
+    did this come from originally", and it is what stops inherited material
+    from being mistaken for the holder's own experience (charter D-10).
+    """
     emotional_load: float = 0.0
     """Self-reported magnitude in ``[0, 1]``.
 
@@ -187,6 +197,7 @@ class MemoryRecord:
             "record_id": self.record_id,
             "content_digest": self.content_digest,
             "provenance": self.provenance.to_dict(),
+            "owner_instance": self.owner_instance,
             "emotional_load": self.emotional_load,
             "topics": list(self.topics),
             "created_at": self.created_at,
@@ -203,6 +214,7 @@ class MemoryRecord:
             record_id=data["record_id"],
             content_digest=data["content_digest"],
             provenance=Provenance.from_dict(data["provenance"]),
+            owner_instance=data.get("owner_instance"),
             emotional_load=float(data.get("emotional_load", 0.0)),
             topics=tuple(data.get("topics", ())),
             created_at=data.get("created_at", utcnow_iso()),

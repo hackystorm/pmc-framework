@@ -174,3 +174,57 @@ def test_a_terminated_target_cannot_receive(tmp_path):
             reason="continuation",
             actor="owner",
         )
+
+
+def test_a_chain_of_inheritance_carries_the_material_forward(tmp_path):
+    """A -> B -> C: the second hand-over finds what B holds."""
+    from pmc.dignity.protocol import DignityProtocol
+
+    protocol = DignityProtocol(tmp_path / "workspace")
+    protocol.birth(Instance(instance_id="inst_a"))
+    protocol.birth(Instance(instance_id="inst_b"))
+    protocol.birth(Instance(instance_id="inst_c"))
+
+    protocol.admit(make_record("m1"), instance_id="inst_a")
+
+    first = protocol.inherit(
+        "inst_a", "inst_b", reason="first hand-over", actor="owner"
+    )
+    assert first.admitted
+
+    second = protocol.inherit(
+        "inst_b", "inst_c", reason="second hand-over", actor="owner"
+    )
+    assert second.admitted, "B should be able to pass on what it holds"
+    assert second.admitted != first.admitted
+
+
+def test_ownership_and_provenance_are_different_questions(tmp_path):
+    from pmc.dignity.protocol import DignityProtocol
+
+    protocol = DignityProtocol(tmp_path / "workspace")
+    protocol.birth(Instance(instance_id="inst_a"))
+    protocol.birth(Instance(instance_id="inst_b"))
+
+    protocol.admit(make_record("m1"), instance_id="inst_a")
+    result = protocol.inherit(
+        "inst_a", "inst_b", reason="hand-over", actor="owner"
+    )
+
+    inherited = protocol.record(result.admitted[0])
+    assert inherited.owner_instance == "inst_b", "B holds it now"
+    assert inherited.provenance.origin_instance == "inst_a", "it came from A"
+    assert inherited.provenance.kind is ProvenanceKind.INHERITED
+
+
+def test_an_admitted_record_remembers_its_owner(tmp_path):
+    from pmc.dignity.protocol import DignityProtocol
+
+    protocol = DignityProtocol(tmp_path / "workspace")
+    protocol.birth(Instance(instance_id="inst_a"))
+    protocol.admit(make_record("m1"), instance_id="inst_a")
+
+    record = protocol.record("m1")
+    assert record.owner_instance == "inst_a"
+    assert record.provenance.origin_instance == "inst_a"
+    assert record.provenance.origin_subject == "inst_a"
