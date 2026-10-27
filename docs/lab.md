@@ -528,3 +528,21 @@ Every agent report contains: files changed, interfaces added, the exact test
 command and output summary, an evidence level per claim, and the open questions
 for the orchestrator. An agent that cannot verify a claim says so plainly
 instead of producing a plausible number.
+
+## Version control
+
+The rule is one commit per **verified success**, not per hour of work.
+
+- A commit happens when a gate is green and the numbers are known: not
+  "the code compiles", but "the gradient check passes over every parameter
+  group, cargo 90/0/3". A commit message states what was measured, and a
+  negative is committed with the same care as a positive.
+- A failing gate is never committed. If a result is only half-finished, it
+  stays in the working tree, because a commit is a claim that someone else
+  can build on.
+- Nothing is pushed until the publish checks pass: English, no personal
+  data, no secrets, licences correct, no stray files.
+- Every commit records the gate results it was verified against, so the
+  history can be read as the evidence trail rather than as a diary.
+- The working tree stays clean between successes. An uncommitted change is
+  work in progress, and it is called that.
