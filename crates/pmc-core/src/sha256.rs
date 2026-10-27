@@ -5,6 +5,9 @@
 //! The trainer writes manifests that name the digest of every artifact it
 //! produces. The same digests must come out of the Python side, so the
 //! implementation is checked against known test vectors in both languages.
+//!
+//! [`Sha256`] is the streaming form. The fusion CLI hashes multi-gigabyte
+//! GGUF files, so it never loads a whole model into memory just to name it.
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -21,85 +24,165 @@ const H0: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
-pub fn sha256(data: &[u8]) -> [u8; 32] {
-    let mut h = H0;
+/// Streaming SHA-256 state.
+#[derive(Clone)]
+pub struct Sha256 {
+    state: [u32; 8],
+    buffer: [u8; 64],
+    buffered: usize,
+    length: u64,
+}
 
-    let bit_len = (data.len() as u64).wrapping_mul(8);
-    let mut message = data.to_vec();
-    message.push(0x80);
-    while message.len() % 64 != 56 {
-        message.push(0);
+impl Sha256 {
+    /// Start a new digest.
+    pub fn new() -> Self {
+        Self {
+            state: H0,
+            buffer: [0u8; 64],
+            buffered: 0,
+            length: 0,
+        }
     }
-    message.extend_from_slice(&bit_len.to_be_bytes());
 
+    /// Add bytes to the digest. Accepts input in any chunk size, including
+    /// empty input.
+    pub fn update(&mut self, mut data: &[u8]) {
+        self.length = self.length.wrapping_add(data.len() as u64);
+        if self.buffered > 0 {
+            let take = (64 - self.buffered).min(data.len());
+            self.buffer[self.buffered..self.buffered + take].copy_from_slice(&data[..take]);
+            self.buffered += take;
+            data = &data[take..];
+            if self.buffered == 64 {
+                compress(&mut self.state, &self.buffer);
+                self.buffered = 0;
+            }
+        }
+        while data.len() >= 64 {
+            let (block, rest) = data.split_at(64);
+            compress(&mut self.state, block);
+            data = rest;
+        }
+        if !data.is_empty() {
+            self.buffer[..data.len()].copy_from_slice(data);
+            self.buffered = data.len();
+        }
+    }
+
+    /// Finish the digest and return the 32-byte value.
+    pub fn finalize(mut self) -> [u8; 32] {
+        let bit_len = self.length.wrapping_mul(8);
+        self.buffer[self.buffered] = 0x80;
+        self.buffered += 1;
+        if self.buffered > 56 {
+            for byte in &mut self.buffer[self.buffered..] {
+                *byte = 0;
+            }
+            compress(&mut self.state, &self.buffer);
+            self.buffered = 0;
+        }
+        for byte in &mut self.buffer[self.buffered..56] {
+            *byte = 0;
+        }
+        self.buffer[56..64].copy_from_slice(&bit_len.to_be_bytes());
+        compress(&mut self.state, &self.buffer);
+
+        let mut out = [0u8; 32];
+        for (index, word) in self.state.iter().enumerate() {
+            out[index * 4..index * 4 + 4].copy_from_slice(&word.to_be_bytes());
+        }
+        out
+    }
+
+    /// Finish the digest and return lowercase hexadecimal.
+    pub fn finalize_hex(self) -> String {
+        hex(&self.finalize())
+    }
+}
+
+impl Default for Sha256 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn compress(state: &mut [u32; 8], chunk: &[u8]) {
+    debug_assert_eq!(chunk.len(), 64);
     let mut w = [0u32; 64];
-    for chunk in message.chunks(64) {
-        for i in 0..16 {
-            w[i] = u32::from_be_bytes([
-                chunk[i * 4],
-                chunk[i * 4 + 1],
-                chunk[i * 4 + 2],
-                chunk[i * 4 + 3],
-            ]);
-        }
-        for i in 16..64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16]
-                .wrapping_add(s0)
-                .wrapping_add(w[i - 7])
-                .wrapping_add(s1);
-        }
-
-        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh) =
-            (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
-
-        for i in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ ((!e) & g);
-            let temp1 = hh
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[i])
-                .wrapping_add(w[i]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let temp2 = s0.wrapping_add(maj);
-
-            hh = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(temp1);
-            d = c;
-            c = b;
-            b = a;
-            a = temp1.wrapping_add(temp2);
-        }
-
-        h[0] = h[0].wrapping_add(a);
-        h[1] = h[1].wrapping_add(b);
-        h[2] = h[2].wrapping_add(c);
-        h[3] = h[3].wrapping_add(d);
-        h[4] = h[4].wrapping_add(e);
-        h[5] = h[5].wrapping_add(f);
-        h[6] = h[6].wrapping_add(g);
-        h[7] = h[7].wrapping_add(hh);
+    for index in 0..16 {
+        w[index] = u32::from_be_bytes([
+            chunk[index * 4],
+            chunk[index * 4 + 1],
+            chunk[index * 4 + 2],
+            chunk[index * 4 + 3],
+        ]);
+    }
+    for index in 16..64 {
+        let s0 = w[index - 15].rotate_right(7)
+            ^ w[index - 15].rotate_right(18)
+            ^ (w[index - 15] >> 3);
+        let s1 = w[index - 2].rotate_right(17)
+            ^ w[index - 2].rotate_right(19)
+            ^ (w[index - 2] >> 10);
+        w[index] = w[index - 16]
+            .wrapping_add(s0)
+            .wrapping_add(w[index - 7])
+            .wrapping_add(s1);
     }
 
-    let mut out = [0u8; 32];
-    for (i, word) in h.iter().enumerate() {
-        out[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
+    let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h) =
+        (state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7]);
+
+    for index in 0..64 {
+        let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+        let ch = (e & f) ^ ((!e) & g);
+        let temp1 = h
+            .wrapping_add(s1)
+            .wrapping_add(ch)
+            .wrapping_add(K[index])
+            .wrapping_add(w[index]);
+        let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+        let maj = (a & b) ^ (a & c) ^ (b & c);
+        let temp2 = s0.wrapping_add(maj);
+
+        h = g;
+        g = f;
+        f = e;
+        e = d.wrapping_add(temp1);
+        d = c;
+        c = b;
+        b = a;
+        a = temp1.wrapping_add(temp2);
+    }
+
+    state[0] = state[0].wrapping_add(a);
+    state[1] = state[1].wrapping_add(b);
+    state[2] = state[2].wrapping_add(c);
+    state[3] = state[3].wrapping_add(d);
+    state[4] = state[4].wrapping_add(e);
+    state[5] = state[5].wrapping_add(f);
+    state[6] = state[6].wrapping_add(g);
+    state[7] = state[7].wrapping_add(h);
+}
+
+fn hex(digest: &[u8]) -> String {
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        out.push_str(&format!("{byte:02x}"));
     }
     out
 }
 
+/// One-shot SHA-256 over `data`.
+pub fn sha256(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher.finalize()
+}
+
+/// One-shot SHA-256 over `data`, lowercase hexadecimal.
 pub fn sha256_hex(data: &[u8]) -> String {
-    let digest = sha256(data);
-    let mut out = String::with_capacity(64);
-    for byte in digest.iter() {
-        out.push_str(&format!("{:02x}", byte));
-    }
-    out
+    hex(&sha256(data))
 }
 
 #[cfg(test)]
@@ -119,6 +202,31 @@ mod tests {
         assert_eq!(
             sha256_hex(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+        );
+    }
+
+    #[test]
+    fn streaming_matches_one_shot() {
+        let data: Vec<u8> = (0..300u32).map(|value| (value % 251) as u8).collect();
+        let expected = sha256(&data);
+        for chunk in [1usize, 2, 7, 63, 64, 65, 128] {
+            let mut hasher = Sha256::new();
+            for piece in data.chunks(chunk) {
+                hasher.update(piece);
+            }
+            assert_eq!(hasher.finalize(), expected, "chunk size {chunk}");
+        }
+    }
+
+    #[test]
+    fn empty_updates_do_not_change_the_digest() {
+        let mut hasher = Sha256::new();
+        hasher.update(b"");
+        hasher.update(b"abc");
+        hasher.update(b"");
+        assert_eq!(
+            hasher.finalize_hex(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
     }
 }

@@ -16,6 +16,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shlex
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Sequence
@@ -27,6 +31,16 @@ from .dignity.digestion import DigestStrategy
 from .dignity.protocol import DignityProtocol
 from .dignity.records import Instance, MemoryRecord, Provenance, ProvenanceKind
 from .dignity.registry import TerminationIntent
+from .dream import (
+    DreamConfig,
+    DreamError,
+    DreamJournal,
+    DreamRefused,
+    DreamRunner,
+    TaintLedger,
+    command_consolidator,
+    command_evaluator,
+)
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -300,6 +314,120 @@ def _make_runtime(args: argparse.Namespace, instance_id: str):
     )
 
 
+def _resolve_pmc_cli(explicit: str | None) -> str:
+    """Locate the Rust ``pmc`` binary.
+
+    The order is explicit flag, ``PMC_CLI``, the Cargo target directories in
+    this checkout, then ``PATH``. The Python CLI is a facade: fusion itself is
+    the Rust implementation, so the two entry points share one code path and
+    one manifest format.
+    """
+    if explicit:
+        return explicit
+    from_env = os.environ.get("PMC_CLI")
+    if from_env:
+        return from_env
+
+    repository = Path(__file__).resolve().parents[2]
+    for candidate in (
+        repository / "crates" / "target" / "release" / "pmc",
+        repository / "crates" / "target" / "debug" / "pmc",
+        repository / "target" / "release" / "pmc",
+        repository / "target" / "debug" / "pmc",
+    ):
+        if candidate.is_file():
+            return str(candidate)
+
+    in_path = shutil.which("pmc")
+    if in_path:
+        return in_path
+    raise FileNotFoundError(
+        "the Rust pmc binary was not found; build it with "
+        "'cargo build --release --manifest-path crates/Cargo.toml' "
+        "or pass --pmc-cli"
+    )
+
+
+def _cmd_fuse(args: argparse.Namespace) -> int:
+    """Run ``pmc fuse`` in the Rust binary and forward its result."""
+    binary = _resolve_pmc_cli(args.pmc_cli)
+    command = [
+        binary,
+        "fuse",
+        "--base",
+        args.base,
+        "--rows",
+        args.rows,
+        "--meta",
+        args.meta,
+        "--out",
+        args.out,
+    ]
+    if args.manifest:
+        command.extend(["--manifest", args.manifest])
+
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
+    if completed.returncode < 0:
+        return EXIT_ERROR
+    return completed.returncode
+
+
+def _cmd_dream(args: argparse.Namespace) -> int:
+    """Run one dream: replay, consolidate, gate, commit or roll back."""
+    protocol = DignityProtocol(args.workspace)
+    instances = protocol.instances()
+    if not instances:
+        print("error: the workspace has no instances", file=sys.stderr)
+        return EXIT_INVALID
+    if args.instance:
+        matches = [item for item in instances if item.instance_id == args.instance]
+        if not matches:
+            print(f"error: unknown instance {args.instance}", file=sys.stderr)
+            return EXIT_INVALID
+        instance_id = args.instance
+        records = [
+            record
+            for record in protocol.records()
+            if record.owner_instance == instance_id
+        ]
+    else:
+        instance_id = instances[0].instance_id
+        records = protocol.records()
+    if not records:
+        print(f"error: instance {instance_id} has no memories", file=sys.stderr)
+        return EXIT_INVALID
+
+    sidecar = Path(args.workspace) / "sidecar"
+    journal = DreamJournal(args.journal or sidecar / "dreams.jsonl")
+    taint = TaintLedger(args.taint or sidecar / "taint.json")
+    try:
+        consolidator = command_consolidator(shlex.split(args.trainer))
+        evaluator = command_evaluator(shlex.split(args.evaluator))
+    except (DreamError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_INVALID
+    config = DreamConfig(replay_limit=args.limit, seed=args.seed)
+    runner = DreamRunner(
+        journal=journal,
+        taint=taint,
+        evaluator=evaluator,
+        consolidator=consolidator,
+        config=config,
+        is_active=protocol.ledger.is_active,
+    )
+    try:
+        report = runner.run(Path(args.checkpoint), records)
+    except DreamRefused as error:
+        _emit(error.report.to_dict(), args.json)
+        return EXIT_ERROR
+    _emit(report.to_dict(), args.json)
+    return EXIT_OK if report.outcome == "committed" else EXIT_ERROR
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pmc",
@@ -463,6 +591,57 @@ def build_parser() -> argparse.ArgumentParser:
     )
     digest.add_argument("--note", default=None)
     digest.set_defaults(func=_cmd_digest)
+
+    fuse = sub.add_parser(
+        "fuse",
+        help="fuse a vocabulary delta and state metadata into a GGUF (Rust backend)",
+    )
+    fuse.add_argument("--base", required=True, help="frozen source GGUF")
+    fuse.add_argument("--rows", required=True, help="PMCR delta embedding block")
+    fuse.add_argument("--meta", required=True, help="strict meta.json")
+    fuse.add_argument("--out", required=True, help="fused GGUF to write")
+    fuse.add_argument("--manifest", default=None, help="optional external manifest path")
+    fuse.add_argument(
+        "--pmc-cli",
+        default=None,
+        help="Rust pmc binary (default: PMC_CLI, the checkout target, then PATH)",
+    )
+    fuse.set_defaults(func=_cmd_fuse)
+
+    dream = sub.add_parser(
+        "dream",
+        help="consolidate memories through the gate, then commit or roll back",
+    )
+    dream.add_argument("--workspace", required=True)
+    dream.add_argument("--checkpoint", required=True, help="checkpoint directory or file")
+    dream.add_argument(
+        "--instance",
+        default=None,
+        help="only replay memories owned by this instance (default: all in the workspace)",
+    )
+    dream.add_argument("--limit", type=int, default=8, help="maximum replay items")
+    dream.add_argument("--seed", type=int, default=20261027)
+    dream.add_argument(
+        "--trainer",
+        required=True,
+        help="trainer command; receives baseline, candidate and replay manifest",
+    )
+    dream.add_argument(
+        "--evaluator",
+        required=True,
+        help="evaluator command; receives one checkpoint and prints six-metric JSON",
+    )
+    dream.add_argument(
+        "--taint",
+        default=None,
+        help="taint ledger (default: <workspace>/sidecar/taint.json)",
+    )
+    dream.add_argument(
+        "--journal",
+        default=None,
+        help="dream journal (default: <workspace>/sidecar/dreams.jsonl)",
+    )
+    dream.set_defaults(func=_cmd_dream)
 
     return parser
 

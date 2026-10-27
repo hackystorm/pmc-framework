@@ -2,13 +2,15 @@
 
 //! The `pmc` binary.
 //!
-//! One executable, no runtime dependencies, no Python. It trains, discovers
-//! and exports, which is enough for a local machine with nothing installed.
+//! One executable, no runtime dependencies, no Python. It trains, discovers,
+//! fuses and exports, which is enough for a local machine with nothing
+//! installed.
 
 use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use pmc_cli::fuse::{fuse, FuseRequest};
 use pmc_core::{Json, Rng};
 use pmc_discovery::StateSpace;
 use pmc_train::{export_checkpoint, train, TrainConfig};
@@ -38,6 +40,8 @@ fn usage() {
 Usage:
   pmc train    [--seed N] [--steps N] [--lr F] [--hidden N] [--keys N] [--out DIR]
   pmc discover [--seed N] [--points N] [--dim N] [--k N]
+  pmc fuse     --base BASE.gguf --rows ROWS.bin --meta META.json --out OUT.gguf
+               [--manifest MANIFEST.json]
   pmc version
 "
     );
@@ -97,6 +101,40 @@ fn main() -> ExitCode {
             ]);
             println!("{}", summary.to_string());
             ExitCode::SUCCESS
+        }
+        "fuse" => {
+            let (Some(base), Some(rows), Some(meta), Some(out)) = (
+                option(&args, "--base"),
+                option(&args, "--rows"),
+                option(&args, "--meta"),
+                option(&args, "--out"),
+            ) else {
+                eprintln!("error: fuse requires --base, --rows, --meta and --out");
+                usage();
+                return ExitCode::from(1);
+            };
+            let manifest = option(&args, "--manifest");
+            if manifest.is_none() && args.iter().any(|arg| arg == "--manifest") {
+                eprintln!("error: --manifest requires a path");
+                return ExitCode::from(1);
+            }
+            let request = FuseRequest {
+                base: PathBuf::from(base),
+                rows: PathBuf::from(rows),
+                meta: PathBuf::from(meta),
+                out: PathBuf::from(out),
+                manifest: manifest.map(PathBuf::from),
+            };
+            match fuse(&request) {
+                Ok(report) => {
+                    println!("{}", report.to_json().to_string());
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("error: fuse failed: {}", error);
+                    ExitCode::from(1)
+                }
+            }
         }
         "version" => {
             println!("pmc {} (artifact format {})", env!("CARGO_PKG_VERSION"), pmc_core::ARTIFACT_FORMAT_VERSION);

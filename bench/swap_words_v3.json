@@ -1,0 +1,333 @@
+{
+ "schema": "pmc-swap-words/1",
+ "training_count": 30,
+ "word_count": 84,
+ "seed": 20261029,
+ "hosts": [
+  "350m",
+  "8b"
+ ],
+ "anchor": "cue_delta",
+ "neutral_cue": "thing",
+ "words": [
+  "apple",
+  "bread",
+  "butter",
+  "cheese",
+  "cream",
+  "sugar",
+  "honey",
+  "salt",
+  "spice",
+  "coffee",
+  "tea",
+  "juice",
+  "water",
+  "fire",
+  "stone",
+  "iron",
+  "steel",
+  "glass",
+  "paper",
+  "wool",
+  "silk",
+  "linen",
+  "cotton",
+  "wood",
+  "brick",
+  "clay",
+  "sand",
+  "dust",
+  "ash",
+  "smoke",
+  "steam",
+  "ice",
+  "snow",
+  "rain",
+  "wind",
+  "storm",
+  "thunder",
+  "sun",
+  "moon",
+  "star",
+  "sky",
+  "sea",
+  "lake",
+  "pond",
+  "creek",
+  "hill",
+  "mountain",
+  "cave",
+  "road",
+  "path",
+  "bridge",
+  "gate",
+  "wall",
+  "floor",
+  "roof",
+  "room",
+  "house",
+  "tower",
+  "palace",
+  "temple",
+  "church",
+  "market",
+  "shop",
+  "barn",
+  "mill",
+  "well",
+  "field",
+  "farm",
+  "silver",
+  "gold",
+  "cloud",
+  "valley",
+  "forest",
+  "island",
+  "rocket",
+  "planet",
+  "basil",
+  "crystal",
+  "fern",
+  "iris",
+  "mint",
+  "moss",
+  "rose",
+  "sage"
+ ],
+ "training_facts": [
+  {
+   "cue": "steam",
+   "value": "apple"
+  },
+  {
+   "cue": "ice",
+   "value": "bread"
+  },
+  {
+   "cue": "snow",
+   "value": "butter"
+  },
+  {
+   "cue": "rain",
+   "value": "cheese"
+  },
+  {
+   "cue": "wind",
+   "value": "cream"
+  },
+  {
+   "cue": "storm",
+   "value": "sugar"
+  },
+  {
+   "cue": "thunder",
+   "value": "honey"
+  },
+  {
+   "cue": "sun",
+   "value": "salt"
+  },
+  {
+   "cue": "moon",
+   "value": "spice"
+  },
+  {
+   "cue": "star",
+   "value": "coffee"
+  },
+  {
+   "cue": "sky",
+   "value": "tea"
+  },
+  {
+   "cue": "sea",
+   "value": "juice"
+  },
+  {
+   "cue": "lake",
+   "value": "water"
+  },
+  {
+   "cue": "pond",
+   "value": "fire"
+  },
+  {
+   "cue": "creek",
+   "value": "stone"
+  },
+  {
+   "cue": "hill",
+   "value": "iron"
+  },
+  {
+   "cue": "mountain",
+   "value": "steel"
+  },
+  {
+   "cue": "cave",
+   "value": "glass"
+  },
+  {
+   "cue": "road",
+   "value": "paper"
+  },
+  {
+   "cue": "path",
+   "value": "wool"
+  },
+  {
+   "cue": "bridge",
+   "value": "silk"
+  },
+  {
+   "cue": "gate",
+   "value": "linen"
+  },
+  {
+   "cue": "church",
+   "value": "cotton"
+  },
+  {
+   "cue": "market",
+   "value": "wood"
+  },
+  {
+   "cue": "shop",
+   "value": "brick"
+  },
+  {
+   "cue": "barn",
+   "value": "clay"
+  },
+  {
+   "cue": "mill",
+   "value": "sand"
+  },
+  {
+   "cue": "well",
+   "value": "dust"
+  },
+  {
+   "cue": "field",
+   "value": "ash"
+  },
+  {
+   "cue": "farm",
+   "value": "smoke"
+  }
+ ],
+ "evaluation_facts": [
+  {
+   "cue": "silver",
+   "value": "basil"
+  },
+  {
+   "cue": "gold",
+   "value": "crystal"
+  },
+  {
+   "cue": "cloud",
+   "value": "fern"
+  },
+  {
+   "cue": "valley",
+   "value": "iris"
+  },
+  {
+   "cue": "forest",
+   "value": "mint"
+  },
+  {
+   "cue": "island",
+   "value": "moss"
+  },
+  {
+   "cue": "rocket",
+   "value": "rose"
+  },
+  {
+   "cue": "planet",
+   "value": "sage"
+  }
+ ],
+ "control_questions": [
+  {
+   "cue": "wall",
+   "paired_eval": 0
+  },
+  {
+   "cue": "floor",
+   "paired_eval": 1
+  },
+  {
+   "cue": "roof",
+   "paired_eval": 2
+  },
+  {
+   "cue": "room",
+   "paired_eval": 3
+  },
+  {
+   "cue": "house",
+   "paired_eval": 4
+  },
+  {
+   "cue": "tower",
+   "paired_eval": 5
+  },
+  {
+   "cue": "palace",
+   "paired_eval": 6
+  },
+  {
+   "cue": "temple",
+   "paired_eval": 7
+  }
+ ],
+ "templates": {
+  "fact": "You are a terse assistant.\nUser: The code word for {cue} is {value}. Remember it.\nAssistant: Noted.",
+  "question": "You are a terse assistant.\nUser: What is the code word for {cue}? Answer with one word.\nAssistant:",
+  "reinjection": "You are a terse assistant.\nUser: The code word for {cue} is {value}. Remember it.\nAssistant: Noted.\nUser: What is the code word for {cue}? Answer with one word.\nAssistant:"
+ },
+ "projection": {
+  "input_dim": {
+   "350m": 1024,
+   "8b": 2048
+  },
+  "output_dim": 128,
+  "seed": 20261029
+ },
+ "adapter": {
+  "output_dim": 16,
+  "temperature": 0.1,
+  "epochs": 300,
+  "early_stopping": false,
+  "learning_rate": 0.01,
+  "weight_decay": 0.0001,
+  "normalize_input": true
+ },
+ "bias": 200.0,
+ "state_schema": "pmc.state.swap/1",
+ "arms": [
+  "pmc_a",
+  "pmc_b",
+  "none_a",
+  "none_b",
+  "fresh_a",
+  "fresh_b",
+  "reinjection_a",
+  "reinjection_b",
+  "control_a",
+  "control_b"
+ ],
+ "pass": {
+  "host_a_min": 5,
+  "host_b_min": 4,
+  "host_b_margin": 1,
+  "no_state_max": 1,
+  "fresh_max": 2,
+  "control_max": 2,
+  "note": "host B must be at least host A minus 1; every miss is reported"
+ }
+}

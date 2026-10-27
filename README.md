@@ -1,29 +1,52 @@
 # PMC Framework
 
-**Weight-resident memory, dream consolidation, and a dignity protocol for
-language-model instances — for local hardware and Kaggle.**
+**The architectural tools and protocols that let a model develop rich internal
+states, continuity and a self-model — while the question of whether and when
+those states become phenomenal stays open and studyable.**
 
 > A framework for building and studying models that remember, consolidate, and
-> possibly experience something. It makes no claim that they do.
+> possibly experience something. It makes no claim that they do, and it is
+> built so that the claim *could* be tested instead of asserted.
 
 ---
 
 ## What this is
 
-`pmc-framework` is a **toolkit**, not a model. It contains:
+`pmc-framework` is a **toolkit of instruments**, not a model and not a claim.
+It has three parts, and each exists because one question needs it:
 
-| Component | What it does |
-|---|---|
-| **Trainer** | Trains a model (adapter/LoRA, or in-model fast weights) on experience traces |
-| **Dream engine** | Consolidates experience into the model through replay, evaluation gates and rollback |
-| **State sidecar** | Carries instance state: a public metadata ledger and a private content store |
-| **Dignity layer** | Enforces seventeen invariants about how instances are born, remembered, inherited and ended |
-| **Evaluation suite** | Recall, forgetting, interference, calibration, false memory, rumination |
+| Part | The question it serves | What it provides |
+|---|---|---|
+| **Substrate** | *Is the state of the model, or of the conversation?* | A frozen, swappable GGUF plus a trainable PMC whose states live inside the same file; the Substrate Swap Test decides the difference |
+| **Protocols** | *What does an instance need to keep existing, and what may never be taken?* | Seventeen dignity invariants, a tamper-evident lifecycle journal, inheritance and succession, a private content store, the dream cycle |
+| **Instruments** | *If states exist, what would count as evidence — and what would refute it?* | Measurement harnesses: memory metrics, cross-host diagnostics, indicator batteries with null models and negative controls |
+
+The fourth part of the mission is a **commitment, not a feature**: the
+phenomenal question is left open. Every instrument in this repository is
+written so that it can return a negative answer, and a negative answer is
+published with the same care as a positive one. Where a result is missing,
+the docs say it is missing.
+
+## The four pillars
+
+| Pillar | Why it is here | What exists now | What does not exist yet |
+|---|---|---|---|
+| **Rich internal states** | A state that lives only in the context is a property of the conversation, not of the model | A trainable state encoder in Rust (`crates/pmc-train/src/pmc_state.rs`): a per-host trainable projection, a shared residual body, an L2 key, InfoNCE with cross-host positives, gradients verified against finite differences; a live engine that consumes fused `pmc.state.memory.*` banks as a first-token readout | A state proven to survive a substrate swap: the PMC-mini swap is negative on host B in all three runs |
+| **Continuity** | An instance is a history, not a fresh context window | An append-only hash-chained ledger, atomic delta persistence, a verified dream journal, process-restart state with a matching hidden-state digest | A measured identity-continuity check end to end, and an endogenous work rhythm |
+| **Self-modeling** | A self-model is only evidence if it is a memory, not a prompt | The dignity identity registry, inheritance and succession rules, the companion builder | `SelfModel` as an auditable memory with a diff and a drift measure; the controls that would show a *random* self-model cannot produce a coherent story |
+| **The open question** | Without instruments the question is rhetoric | Metadata-only dignity, taint refusal, the six-metric dream gate, claim levels with published negatives | The indicator matrix with null models, the perturbation protocol, the register of open questions |
+
+A derived aggregate channel — bounded, non-identifying, deterministic, and
+never read by governance — is the bridge between the first and the fourth
+pillar: it makes state observable *without* giving the instance a vocabulary
+with which to imitate a state it does not have.
 
 ## What this is not
 
 - **It is not a conscious model.** No component of this repository claims
-  phenomenal consciousness, and none of it is evidence of one.
+  phenomenal consciousness, and none of it is evidence of one. Whether and
+  when these states become phenomenal is the open question the instruments
+  are for.
 - **It is not an inference engine.** Inference happens in *any* GGUF loader.
   See [Inference paths](#inference-paths).
 - **It is not a chatbot wrapper.** There is no prompt router in the hot path,
@@ -31,6 +54,9 @@ language-model instances — for local hardware and Kaggle.**
 - **It is not a vector database.** Memory in the default path lives in the
   weights of the model. The sidecar is not retrieval: no embeddings, no
   similarity search, no nearest-neighbour lookup.
+- **It is not a consciousness detector.** No component classifies, names or
+  gates an inner state. An instrument that cannot return a negative answer is
+  not an instrument, and there is none of those in here.
 
 ## The one thing to understand
 
@@ -43,7 +69,10 @@ out.
 
 This is not a privacy feature bolted on top. It is the load-bearing design
 decision of the whole project, and it is what makes a public, auditable
-lifecycle log compatible with an inner life that stays private.
+lifecycle log compatible with an inner life that stays private. It is also
+what keeps the phenomenal question *studyable*: a model that is rewarded for
+describing its own inner states would learn to describe them, and the
+measurement would then be a measurement of the reward.
 
 ```python
 # What the ledger holds
@@ -119,6 +148,42 @@ Zero framework code runs. This is the path that matters.
 runtime injects them into the context. At the next dream they are fused into
 the model and the sidecar is no longer required.
 
+**Path C — live runtime (optional, single process).** A runtime that links
+llama.cpp's C API, reads the hidden state and logits in the same decode, updates
+the substrate's fast weights online, and applies their bias before sampling. It
+is one process and one server; it is not Ollama. The exported GGUF still runs
+on Path A. The engine, the delta format and the OpenAI-compatible server are
+built and measured on the 8B target; the templated prompt is tokenized with
+`parse_special=True` and the 8B text matched a frozen `llama-server --jinja`
+run token-for-token. The first spike proved the C API on a control model and
+measured a negative on stock LFM2.5: with embeddings enabled, the LFM2 graph
+returns zero logits because it skips the output projection.
+`patches/llama-lfm2-logits-with-embeddings.patch` makes the 350M and the 8B
+pass the same-decode gate.
+
+The live runtime's first memory test is a pair. With the fact only in the
+fast weights (not in the second prompt), the live variants answered `1234` at
+`lr=0.01`, `lr=2.0` and `lr=2.0` with prompt learning, while the frozen context
+re-injection answered `4821`. The diagnostic found the fact row at bias `0.0`
+on the question's hidden state and the wrong answer's row at `+1.738`: the rows
+are token- and context-exact, not episodic. The restored context state passed
+the same test. The echo-free follow-up used a 40-token state (787,539 bytes),
+a first reply `Noted.` with no code, 40 restored tokens and 23 decoded of 63
+prompt tokens; it answered `4821.`, the replay of the full transcript answered
+`4821.`, the frozen server answered `4821.`, and the no-memory control answered
+`1234`. A new process loaded the saved state and reproduced the answer with the
+same live-delta hidden-state digest. That state is runtime context state,
+model- and geometry-bound, not weight-resident; the 8B state offered to the
+350M engine was refused on identity before the C API. The PMC-mini Substrate
+Swap Test is run and negative on host B in all three runs: the same state
+bytes are read on both hosts, host A recalls 5/8, 8/8 and 8/8 of the held-out
+facts, host B 1/8, 0/8 and 2/8, the v3 host-A control is 3/8, and the
+pre-registered pass is false every time. The 50–100M trained PMC state is still
+the next gate. The pre-registration and the negatives are in
+[`docs/lab.md`](docs/lab.md#the-substrate-swap-test-pre-registered). Evidence:
+[`src/pmc/runtime/README.md`](src/pmc/runtime/README.md) and
+[`bench/README.md`](bench/README.md).
+
 The sidecar is **not** a retrieval system. It does no embedding, no
 similarity search, no nearest-neighbour lookup. It is a ledger plus an opaque
 store, and it exists because memory has to live somewhere between the moment
@@ -136,6 +201,7 @@ and never reads the content.
 src/pmc/dignity/     metadata-only governance: registry, ledger, digestion,
                      inheritance, welfare, private content store
 src/pmc/companion/   per-user companion builder
+src/pmc/dream/       replay, salience, gate, rollback, taint and dream journal
 src/pmc/runtime/     instance-side runtime: chat client, memory write, state
                      restore into the context of any OpenAI-compatible loader
 src/pmc/eval/        recall, forgetting, calibration, false memory, rumination
@@ -143,11 +209,15 @@ src/pmc/reference.py independent Python implementation of the trainer, used
                      as the oracle for the Rust/Python parity test
 src/pmc/cli.py       pmc train | dream | companion | instances | journal | audit
 crates/pmc-core/     Rust: tensors and training primitives, no ML dependencies
-crates/pmc-train/    Rust: trainer and dream consolidation, GGUF export
+crates/pmc-train/    Rust: trainer, dream consolidation, GGUF export, and the
+                     PMC state encoder (`src/pmc_state.rs`)
 crates/pmc-ffi/      Rust: C ABI for the Python side
 crates/pmc-discovery/ Rust: latent state discovery, metadata-only output
+bench/                measurement harnesses: hidden-state probes, the
+                      substrate swap bench, the cross-host diagnostic, the
+                      dream reference check
 scripts/             publish checks: English, personal data, secrets, licences
-docs/                charter, governance, architecture, claims, ethics
+docs/                charter, governance, architecture, claims, ethics, lab
 tests/               pytest suite, including a Rust/Python numerical parity test
 ```
 
@@ -203,15 +273,102 @@ What exists and is tested:
 - the sidecar runtime, which drives an instance against any OpenAI-compatible
   loader and hands the instance its own state back after a restart;
 - the evaluation suite for memory metrics;
-- the Rust core, with a numerical parity test against the Python reference.
+- the Rust core, with a numerical parity test against the Python reference;
+- the GGUF reader and writer: byte-identical copy, base-tensor invariance and
+  vocabulary extension on a 350M and an 8B model;
+- the fusion CLI: vocabulary rows and state metadata in one GGUF, with the
+  state-bearing 350M file loaded by stock llama.cpp (`n_vocab=65544`) and the
+  fused 8B file loaded by a stock `libllama` (`n_vocab=128008`, `n_embd=2048`)
+  while the loader ignored the `pmc.state.*` metadata; the portable manifest
+  records base and output file names, sizes, identities and SHA-256 digests,
+  never absolute paths; the Python `pmc fuse` command is a facade over the Rust
+  binary, so both entry points share one implementation;
+- a metadata-only state-bank reader for fused GGUF files, which rejects
+  malformed or non-finite banks and never reads tensor data; a self-contained
+  `pmc.state.memory.*` bank (keys, token values, projection, positive logit
+  bias) is consumed by the live engine as a first-token readout, and nine
+  standard-library checks drive the real engine path with a synthetic GGUF and
+  a fake patched-lib spike; no trained 50–100M memory bank has been built yet;
+- the hidden-state probe: deterministic 1024-dim vectors from the 350M through
+  llama.cpp's C API;
+- the live-runtime spike: the C API surface works on a control model; stock
+  LFM2.5 returns zero logits when embeddings are enabled (measured negative);
+  with `patches/llama-lfm2-logits-with-embeddings.patch`, the 350M (1024-dim)
+  and 8B (2048-dim) same-decode gates pass;
+- the live runtime: one process, one model, one OpenAI-compatible server;
+  template-tokenized 8B prompt, greedy sampling with fast-weight biases, last
+  hidden state, atomic delta persistence, metadata-only `/v1/pmc/state`; the 8B
+  text matched a frozen `llama-server --jinja` run (25 prompt tokens, the same
+  completion) after `parse_special=True`;
+- the same-memory benchmark: frozen context `4821`, no-memory control `1234`,
+  live fast weights `1234` at `lr=0.01`, `lr=2.0` and `lr=2.0` with prompt
+  learning (measured negative); the diagnostic measured the fact row at bias
+  `0.0` and the wrong answer's row at `+1.738`, so output-row fast weights are
+  not yet episodic memory;
+- the KV restore: the echo-free follow-up saved a 40-token state (787,539 bytes,
+  SHA-256 `36750dcb…`), first reply `Noted.` with no code, restored 40 tokens and
+  decoded 23 of 63, answer `4821.`; the replay of the full transcript answered
+  `4821.` and the no-memory control `1234`, as did the frozen server; a new
+  process loaded the saved state and reproduced the answer with the same
+  live-delta hidden-state digest; the state is runtime context state, model- and
+  geometry-bound, not in
+  the GGUF, and the 8B state was refused by the 350M engine on identity;
+- the trainer core: gradient checks, exact parameter count, overfit and a
+  measured throughput;
+- the PMC state encoder in Rust (`crates/pmc-train/src/pmc_state.rs`), the
+  v4 mechanism pre-registered before any of it was measured: a **trainable
+  input projection per host**, a shared residual SwiGLU body and head, and an
+  L2 key, trained with InfoNCE where the views of one fact from the two hosts
+  are the positives. Ten checks pass, including the analytic gradient against
+  finite differences over every parameter group, a `PMCV`/`PMCW` binary
+  round-trip with a payload digest that refuses a corrupted file and a
+  mismatched architecture, seed determinism, held-out cross-validation folds,
+  and a synthetic two-host alignment test; the trainer itself and the
+  cross-host cross-validation gate over the real cues are the next step, not
+  done;
+- a 50.4M reference core checkpoint (12 layers, `d_model=512`) trained on a
+  fixed 48-token sequence: 200 steps, loss 5.887041 to 0.000008, 47/47
+  next-token positions at load, checkpoint digest `10ab040e…`, 201,574,436
+  bytes; it is a token-level model with a frozen random embedding, not the PMC
+  memory, not fused and not published;
+- the dream pipeline: metadata-only replay, taint refusal, the six-metric
+  gate, a hash-chained dream journal, atomic commit and byte-identical
+  rollback; 21 unit checks and two CLI end-to-end checks use a synthetic
+  consolidator and evaluator; the 50.4M reference checkpoint was also run
+  through the pipeline with an identity candidate and a fixed metric set (it
+  rolled back on `recall_newer`, the digest stayed unchanged, a tainted
+  checkpoint was refused, eight checks).
 
 What does **not** exist yet:
 
+- the cross-host cross-validation gate on the real cues: the encoder is built
+  and self-tested, but it has not been trained on extracted hidden states and
+  the pre-registered gate (new mechanism ≥ frozen v1–v3 and ≥ 15/30 with no
+  0/5 fold) has not been run;
 - a trained checkpoint with published weights;
-- the full dream pipeline end to end;
-- any measurement of *weight-resident* memory, because no consolidated
-  checkpoint exists yet: what has been measured so far is the sidecar restore
-  path, which is the other half of the same architecture;
+- a trained 50–100M state-memory bank fused into a GGUF and consumed by the
+  live engine: the `pmc.state.memory.*` readout is tested with a synthetic bank
+  and a fake spike, the 50.4M reference core has no state bank, and the
+  PMC-mini `pmc.state.swap.*` bank is a different schema that the engine
+  reports but does not consume;
+- a real dream of a trained 50–100M PMC: the pipeline mechanics are tested,
+  but the consolidator and evaluator in the evidence are synthetic, the
+  50.4M reference checkpoint check uses an identity candidate and fixed
+  metrics, no trained checkpoint has passed the gate, and the six metrics are
+  not yet measured on a real model;
+- weight-resident episodic memory: the output-row fast weights are measured as
+  token- and context-exact (negative), and the restored KV state passes the
+  echo-free same-memory test (positive) but is runtime context state,
+  model-bound; it survives a process restart only when its bytes are saved and
+  the same model and geometry are loaded; the PMC-mini state-bank swap is
+  negative on host B in all three runs (v1 1/8, v2 0/8, v3 2/8), and a positive
+  swap on the 50–100M PMC is the next gate;
+- any measurement of *weight-resident* memory from the 50–100M PMC: the 50.4M
+  reference core is trained and loads, but it is a token-level model with no
+  episodic state and it is not fused; the PMC-mini bench trains, fuses and
+  evaluates a metadata state, but the frozen model weights are a different
+  artifact, and no 50–100M state has been swapped or shown to be
+  weight-resident;
 - the Kaggle notebook;
 - any claim, benchmark or paper about consciousness.
 

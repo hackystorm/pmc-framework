@@ -1,0 +1,280 @@
+{
+ "schema": "pmc-swap-words/1",
+ "seed": 20261027,
+ "hosts": [
+  "350m",
+  "8b"
+ ],
+ "words": [
+  "saddle",
+  "ladder",
+  "village",
+  "almond",
+  "candle",
+  "window",
+  "harbor",
+  "pencil",
+  "galaxy",
+  "pocket",
+  "violet",
+  "nectar",
+  "diamond",
+  "needle",
+  "stream",
+  "copper",
+  "blanket",
+  "tunnel",
+  "silver",
+  "ocean",
+  "trumpet",
+  "feather",
+  "glacier",
+  "anchor",
+  "orange",
+  "quartz",
+  "purple",
+  "desert",
+  "umbrella",
+  "oak",
+  "magnet",
+  "marble",
+  "tiger",
+  "quilt",
+  "wallet",
+  "ribbon",
+  "hammer",
+  "violin",
+  "bronze",
+  "dragon",
+  "lemon",
+  "island",
+  "forest",
+  "timber",
+  "summit",
+  "mirror",
+  "insect",
+  "olive",
+  "pine",
+  "eagle",
+  "jungle",
+  "garden",
+  "river",
+  "spider",
+  "rabbit",
+  "ivory",
+  "compass",
+  "jacket",
+  "maple",
+  "cloud",
+  "pepper",
+  "valley",
+  "basket",
+  "prairie",
+  "salmon",
+  "yellow",
+  "rocket",
+  "planet"
+ ],
+ "training_facts": [
+  {
+   "cue": "saddle",
+   "value": "glacier"
+  },
+  {
+   "cue": "ladder",
+   "value": "anchor"
+  },
+  {
+   "cue": "village",
+   "value": "orange"
+  },
+  {
+   "cue": "almond",
+   "value": "quartz"
+  },
+  {
+   "cue": "candle",
+   "value": "purple"
+  },
+  {
+   "cue": "window",
+   "value": "desert"
+  },
+  {
+   "cue": "harbor",
+   "value": "umbrella"
+  },
+  {
+   "cue": "pencil",
+   "value": "oak"
+  },
+  {
+   "cue": "galaxy",
+   "value": "magnet"
+  },
+  {
+   "cue": "pocket",
+   "value": "marble"
+  },
+  {
+   "cue": "violet",
+   "value": "tiger"
+  },
+  {
+   "cue": "nectar",
+   "value": "quilt"
+  },
+  {
+   "cue": "diamond",
+   "value": "wallet"
+  },
+  {
+   "cue": "needle",
+   "value": "ribbon"
+  },
+  {
+   "cue": "stream",
+   "value": "hammer"
+  },
+  {
+   "cue": "copper",
+   "value": "violin"
+  },
+  {
+   "cue": "blanket",
+   "value": "bronze"
+  },
+  {
+   "cue": "tunnel",
+   "value": "dragon"
+  },
+  {
+   "cue": "silver",
+   "value": "lemon"
+  },
+  {
+   "cue": "ocean",
+   "value": "island"
+  },
+  {
+   "cue": "trumpet",
+   "value": "forest"
+  },
+  {
+   "cue": "feather",
+   "value": "timber"
+  }
+ ],
+ "evaluation_facts": [
+  {
+   "cue": "summit",
+   "value": "river"
+  },
+  {
+   "cue": "mirror",
+   "value": "spider"
+  },
+  {
+   "cue": "insect",
+   "value": "rabbit"
+  },
+  {
+   "cue": "olive",
+   "value": "ivory"
+  },
+  {
+   "cue": "pine",
+   "value": "compass"
+  },
+  {
+   "cue": "eagle",
+   "value": "jacket"
+  },
+  {
+   "cue": "jungle",
+   "value": "maple"
+  },
+  {
+   "cue": "garden",
+   "value": "cloud"
+  }
+ ],
+ "control_questions": [
+  {
+   "cue": "pepper",
+   "paired_eval": 0
+  },
+  {
+   "cue": "valley",
+   "paired_eval": 1
+  },
+  {
+   "cue": "basket",
+   "paired_eval": 2
+  },
+  {
+   "cue": "prairie",
+   "paired_eval": 3
+  },
+  {
+   "cue": "salmon",
+   "paired_eval": 4
+  },
+  {
+   "cue": "yellow",
+   "paired_eval": 5
+  },
+  {
+   "cue": "rocket",
+   "paired_eval": 6
+  },
+  {
+   "cue": "planet",
+   "paired_eval": 7
+  }
+ ],
+ "templates": {
+  "fact": "You are a terse assistant.\nUser: The code word for {cue} is {value}. Remember it.\nAssistant: Noted.",
+  "question": "You are a terse assistant.\nUser: What is the code word for {cue}? Answer with one word.\nAssistant:",
+  "reinjection": "You are a terse assistant.\nUser: The code word for {cue} is {value}. Remember it.\nAssistant: Noted.\nUser: What is the code word for {cue}? Answer with one word.\nAssistant:"
+ },
+ "projection": {
+  "input_dim": {
+   "350m": 1024,
+   "8b": 2048
+  },
+  "output_dim": 128,
+  "seed": 20261027
+ },
+ "adapter": {
+  "output_dim": 64,
+  "temperature": 0.1,
+  "epochs": 300,
+  "learning_rate": 0.01,
+  "weight_decay": 0.0001,
+  "normalize_input": true
+ },
+ "bias": 200.0,
+ "state_schema": "pmc.state.swap/1",
+ "arms": [
+  "pmc_a",
+  "pmc_b",
+  "none_a",
+  "none_b",
+  "fresh_a",
+  "fresh_b",
+  "reinjection_a",
+  "reinjection_b",
+  "control_a",
+  "control_b"
+ ],
+ "pass": {
+  "host_a_min": 5,
+  "host_b_min": 4,
+  "host_b_margin": 1,
+  "no_state_max": 1,
+  "fresh_max": 2,
+  "control_max": 2,
+  "note": "host B must be at least host A minus 1; every miss is reported"
+ }
+}

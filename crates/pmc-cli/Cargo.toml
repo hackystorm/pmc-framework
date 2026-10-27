@@ -7,11 +7,16 @@ rust-version.workspace = true
 repository.workspace = true
 description = "Single binary for training, discovery and export."
 
+[lib]
+name = "pmc_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "pmc"
 path = "src/main.rs"
 
 [dependencies]
 pmc-core = { path = "../pmc-core" }
+pmc-gguf = { path = "../pmc-gguf" }
 pmc-train = { path = "../pmc-train" }
 pmc-discovery = { path = "../pmc-discovery" }

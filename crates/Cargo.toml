@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "pmc-core",
+  "pmc-gguf",
   "pmc-train",
   "pmc-ffi",
   "pmc-discovery",

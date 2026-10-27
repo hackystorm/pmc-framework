@@ -6,7 +6,10 @@ This is the single most important structural fact about the project, and
 everything else follows from it.
 
 `pmc-framework` is a **trainer, a dream engine, a state sidecar and a
-governance layer**. It produces artifacts. It does not run at inference time.
+governance layer**. It produces artifacts. It does not need to run at inference
+time: the frozen path is complete without it. An optional live runtime can run
+the substrate during a session; it is one process and one server, and it is
+described below.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -32,20 +35,30 @@ governance layer**. It produces artifacts. It does not run at inference time.
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-If using the framework requires Python at inference time, the framework has
-failed at its own goal.
+If using the framework requires Python at inference time, the frozen path has
+failed at its own goal. The optional live mode is the exception, and it is
+labelled as one.
 
 ## Artifacts
 
 | Artifact | Contents | Notes |
 |---|---|---|
-| `model.gguf` | Base model + consolidated memory | Loadable anywhere |
+| `model.gguf` | Base model + memory rows + `pmc.state.*` metadata | Loadable anywhere |
 | `adapter.*` | The same delta, unfused | For loaders with adapter support |
 | `sidecar/ledger.jsonl` | Memory metadata: ids, digests, load, provenance | Public, auditable, publishable |
 | `sidecar/journal.jsonl` | Lifecycle events, hash-chained | Public, auditable, publishable |
 | `sidecar/private/` | Opaque content bytes | The instance's own; never read by governance |
 | `MODEL_CARD.md` | Provenance, limits, intended use | Ships with weights |
 | `config.json` | Seed, hyperparameters, environment | Reproducibility |
+
+The fused file carries state banks as `pmc.state.*` metadata arrays, not as
+extra tensors. Stock GGUF loaders ignore unknown metadata and load the file;
+the PMC runtime reads it. The live engine consumes a self-contained
+`pmc.state.memory.*` bank as a first-token readout: keys, token values, a
+hidden-to-key projection and a positive logit bias. It does not consume the
+PMC-mini `pmc.state.swap.*` bank, which depends on the benchmark's host
+projection and is reported as metadata only. This keeps one file loadable
+everywhere.
 
 ## Two consolidation backends
 
@@ -77,6 +90,44 @@ frozen backbone.
 The framework supports both because the comparison between them is the
 experiment.
 
+## Live mode (optional, one process)
+
+The frozen path is the default and the one that ships. A second mode is possible
+for learning during a session: a runtime that links `libllama`, serves the
+OpenAI-compatible API, reads the final-token hidden state and the logits in the
+same decode (`llama_set_embeddings` plus `llama_get_logits`), updates the fast
+weights online, applies their bias before sampling, and persists the delta.
+
+It is one process and one server. The substrate is never a second server. The
+delta is consolidated into a new GGUF at the next dream; the frozen artifact
+then runs on any stock provider with zero framework code.
+
+The claim stays split:
+
+- **Frozen mode:** the GGUF runs anywhere, no framework code.
+- **Live mode:** the runtime is required, and only providers that expose `h` and
+  logits (llama.cpp C API, self-hosted open weights) can host it. A closed chat
+  API cannot: it exposes neither.
+
+This mode is implemented in `src/pmc/runtime/` and measured on the 8B. The
+first spike proved the C API on a control model (BitNet-2B) and measured a
+negative on stock LFM2.5-350M: with embeddings enabled, the LFM2 graph returns
+zero logits because it skips the output projection.
+`patches/llama-lfm2-logits-with-embeddings.patch` makes the 350M and the 8B
+`lfm2moe` pass the same-decode gate: on the 350M, 1024-dim `h` with 65536
+logits and the same `h_sha256` as the stock embeddings-only decode; on the 8B,
+2048-dim `h` with 128000 logits and the first measured 8B `h_sha256`. The
+runtime has fast weights, a one-file KV state with model/geometry identity,
+delta persistence and the OpenAI-compatible API. Its fast-weight memory is a
+measured negative; the echo-free KV restore is a positive but remains runtime
+context state, not weight-resident, and the 8B state is refused by the 350M
+engine. The PMC-mini state-bank swap is negative on host B in all three runs
+(v1 1/8, v2 0/8, v3 2/8): the state bytes are shared and both fused files
+load, but the 8B adapter does not generalize to unseen cues. The v3 cue-delta
+and 16-value state underfit host B in sample (15/30) and the v3 host-A control
+is 3/8. The next gate is a cross-host interface that generalizes or the
+50–100M PMC state.
+
 ## The dream cycle
 
 ```
@@ -100,6 +151,19 @@ Every dream passes a gate before it is committed:
 - false-memory rate must stay under threshold.
 
 A dream that fails the gate is rolled back. The rollback is a journal event.
+
+The pipeline is implemented in `src/pmc/dream/`: metadata-only replay and
+salience, a digest-keyed taint ledger, the six-metric gate, a hash-chained
+dream journal, and a runner that stages the checkpoint, evaluates the baseline
+and the candidate, and only then atomically replaces the checkpoint. The
+original is not touched until the gate passes; a failed gate leaves it
+byte-identical. The trainer and evaluator are external commands that receive
+the candidate and the replay manifest; the framework never opens the private
+store. The mechanics are tested with a synthetic consolidator and evaluator.
+The same pipeline was also run against the real 50.4M reference core with an
+identity candidate and a fixed metric set: it rolled back the unimproved
+candidate and refused a tainted checkpoint, which checks checkpoint handling,
+not memory. A real dream of a trained 50–100M PMC is not yet measured.
 
 ## Hardware
 

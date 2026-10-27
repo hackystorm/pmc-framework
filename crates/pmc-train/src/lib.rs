@@ -7,13 +7,18 @@
 //! `tests/test_rust_parity.py` and is the reference oracle: both must agree
 //! on the final weights and on the metrics.
 
+pub mod checkpoint;
 pub mod data;
 pub mod export;
 pub mod model;
+pub mod ops;
 pub mod optim;
+pub mod pmc_state;
+pub mod transformer;
 
 pub use export::export_checkpoint;
 pub use model::Mlp;
+pub use transformer::{Embedding, Transformer, TransformerConfig};
 
 use std::time::Instant;
 

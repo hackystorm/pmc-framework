@@ -8,6 +8,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**PMC state encoder** (`crates/pmc-train/src/pmc_state.rs`)
+
+- The v4 mechanism, pre-registered before any of it was measured: a
+  *trainable* input projection per host, a shared residual SwiGLU body and
+  head, and an L2-normalised key. The loss is InfoNCE in which the views of
+  one fact written by the two hosts are the positives, so a key written from
+  one substrate is trained to sit next to the query the other substrate
+  produces.
+- This exists because of a measured limit of the frozen mechanism: the
+  same-host retrieval is perfect and the cross-host retrieval sits near
+  chance for a third of the even-in-sample cues. The input projection must
+  learn the substrates' difference; the body must share it.
+- `infonce_loss_and_grad` is a port of the bench oracle, verified against it.
+- The backward pass applies the L2-key normalisation gradient exactly once,
+  inside `backward`, because applying it in the caller as well normalises the
+  gradient twice.
+- Binary `PMCV` views and `PMCW` weights formats, with a SHA-256 payload
+  digest: a corrupted file is refused, a mismatched architecture is refused,
+  and a header that would ask for an implausible allocation is refused before
+  anything is allocated.
+- `cross_validate` trains one fold at a time and reports the retrieval over
+  all the labels, counting only the held-out ones.
+- Ten checks: the gradients against finite differences over every parameter
+  group, both file round-trips, corrupted and mismatched-file refusal,
+  held-out-fold bookkeeping, seed determinism, and a synthetic two-host
+  alignment test where a fixed rotation must be undone by the trainable
+  projection.
+
 **Runtime** (`src/pmc/runtime/`)
 
 - `ChatClient`: a standard-library client for any OpenAI-compatible endpoint,
@@ -21,6 +49,95 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `pmc companion create` now accepts `--claims-file` and
   `--opening-prompt-file`, so an instance's whole constitution can be declared
   from the command line.
+- `KvState`: a one-file, atomically written context snapshot carrying the token
+  prefix, SHA-256, model digest, embedding size and context size. Loading
+  verifies all of them; the engine refuses a state from another model or
+  geometry before it calls `llama_state_set_data`.
+- The live benchmark has `--first-style quiet` (a first reply that does not
+  echo the fact), `--no-learn` (fast weights frozen), and `replay` and
+  `kv-restart` conditions. The restart condition loads a saved state and the
+  first turn in a new process and decodes only the suffix.
+- `bench/kv_swap_probe.py`: offers a saved KV state to a different model and
+  records the identity refusal. It is the negative boundary of the Substrate
+  Swap Test, not the positive test.
+
+**State banks and the PMC-mini swap bench** (`src/pmc/runtime/`, `bench/`, `crates/pmc-cli/`)
+
+- `read_state_banks` reads `pmc.state.*` GGUF metadata without touching tensor
+  data. A stock loader ignores the banks and still loads the file.
+- `StateMemory` consumes a self-contained `pmc.state.memory.*` bank in the
+  live engine: `keys [n,d]`, token `values [n]`, a `projection [d,n_embd]`,
+  `projection_bias [d]`, a positive `logit_bias [1]` and an optional
+  `min_similarity [1]`. At the first generated token the engine projects the
+  hidden state, normalises it, chooses the nearest key and promotes the stored
+  value token. The bank is read from metadata only; the engine never names or
+  gates the hidden state. Nine standard-library checks use a synthetic GGUF,
+  the real engine path and a fake spike: with the bank the engine emits the
+  stored token, without it the base token, and malformed, partial, non-unit,
+  non-integer or out-of-vocabulary banks are refused. The PMC-mini
+  `pmc.state.swap.*` bank needs the benchmark's host projection, so it is
+  reported as metadata and is not consumed by the live engine.
+- `bench/substrate_swap.py` is the pre-registered PMC-mini Substrate Swap Test:
+  extract hidden states on one host at a time, train two host adapters with
+  InfoNCE, fuse one shared key/value state and a per-host adapter into each
+  GGUF, and evaluate every arm from the fused files. `bench/swap_words.json`
+  is the last-token v1 split; `bench/swap_words_v2.json` is the separately
+  pre-registered cue-anchor v2 split; `bench/swap_words_v3.json` is the
+  separately pre-registered cue-delta v3 split (30 training cues, neutral-cue
+  subtraction, `8×16` state, 16x128 adapter). `bench/substrate_swap_test.py`
+  has 15 standard-library checks.
+- The v1 run measured host A 5/8 and host B 1/8 on the held-out facts; the v2
+  run measured host A 8/8 and host B 0/8; the v3 run measured host A 8/8 and
+  host B 2/8, with host-A control false positives 3/8. No-state was 0/0 in all
+  three, fresh state 1/2, 2/2 and 2/2, and text re-injection 4/4, 5/6 and 6/6.
+  The pre-registered pass is false in all three runs: the negative is the
+  cross-host interface. Host B is at chance in v1, fits all 22 training cues
+  in sample (22/22) but none of the eight unseen cues in v2, and fits only
+  15 of 30 training cues in sample in v3 while scoring 2/8. The fused 350M and
+  8B still load in stock `libllama` (`n_vocab=65544` and `128008`; state banks
+  ignored). The v1 state is `4a43d78a…`; the v2 state is `b1ac7188…`; the v3
+  state is `35c3430e…`; the adapters differ by host. The v3 fused files were
+  SHA-256 `db3970e3…` (350M, 229,591,968 bytes) and `782d3ce4…` (8B,
+  3,335,440,736 bytes); they are regenerable from the bases and adapters.
+
+**Dream pipeline** (`src/pmc/dream/`, `src/pmc/cli.py`)
+
+- `pmc dream`: metadata-only replay and salience, a digest-keyed taint
+  ledger, the six-metric gate, a hash-chained dream journal, atomic checkpoint
+  commit and byte-identical rollback. The trainer and evaluator are external
+  commands; the framework never opens the private store.
+- The gate checks older recall (bounded drop), newer recall (must improve),
+  interference and false-memory ceilings, calibration and identity. Missing,
+  non-finite or out-of-range metrics fail closed.
+- A tainted checkpoint or replay source is refused before the checkpoint is
+  copied. A failed gate leaves the original checkpoint byte-identical and
+  appends a `rolled_back` journal entry. A hostile consolidator that changes
+  the original is detected and the verified baseline copy is restored. An
+  evaluator that changes the baseline or the candidate is rejected, and the
+  original is unchanged.
+- 21 unit checks in `tests/test_dream.py` and two CLI end-to-end checks in
+  `tests/test_cli.py`. The consolidator and evaluator are synthetic; no
+  trained 50–100M PMC has been consolidated and no six-metric dream has been
+  measured on a real model.
+
+**50.4M reference core** (`crates/pmc-train/examples/`)
+
+- `train_50m.rs` trains a 50,393,600-parameter decoder-only transformer
+  (`n_layer=12`, `d_model=512`, `n_head=8`, `ffn_hidden=2048`, `vocab=256`,
+  `n_positions=64`, `readout_rank=64`) on a fixed 48-token sequence. 200 Adam
+  steps at learning rate 0.003 take the loss from 5.887041 to 0.000008.
+- `eval_50m.rs` loads the checkpoint through the manifest-digest, header,
+  length and parameter-digest checks and scores 47/47 next-token positions at
+  loss 0.00000777. The checkpoint is 201,574,436 bytes; the directory digest
+  is `10ab040e…`.
+- This is a token-level reference core with a frozen random embedding. It is
+  not the PMC memory, it is not fused into a GGUF, and it has no episodic
+  state. It gives the dream pipeline a real checkpoint of the required size.
+- `bench/dream_reference.py` runs the real checkpoint through the pipeline
+  with an identity candidate and a fixed metric set: the gate rolls the
+  candidate back on `recall_newer`, the checkpoint digest is unchanged, a
+  tainted checkpoint digest is refused before any copy, and all eight checks
+  pass. That is E2 for checkpoint handling, not a real six-metric dream.
 
 ### Fixed
 
@@ -36,12 +153,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   budget, so a caller that asks for N characters receives N characters.
 - The runtime is idempotent about identical content: re-remembering the same
   text does not append a second ledger line for the same record.
+- The PMC-mini added output rows were `-100.0`; because they are output
+  weights rather than logit biases, the `<pmc:swap-*>` tokens could win on a
+  retrieved fact (host A 2/8 in the first pass). The rows are `0.0` now.
+- The PMC-mini eval always read the last prompt token, even when the spec's
+  adapter was trained on the cue token (host A 4/8 in the first v2 pass). It
+  now honors the spec's `anchor`.
+- The `extract`, `train` and `eval` paths used the default spec digest even
+  with `--spec`; the digest now travels with the loaded spec, so a custom spec
+  cannot be paired with hidden states from another spec.
+- The cue-delta evaluation now re-decodes the actual question after the
+  neutral-cue probe. Without that, the sampler would read the logits of the
+  neutral prompt instead of the question. The pure prompt swap is covered by
+  the unit checks; the state and adapter banks take their width from the spec
+  (`8×16` in v3, `8×64` in v1/v2), and the validator accepts the declared
+  v3 training/word counts without weakening the v1/v2 defaults.
 
 ### Known limitations
 
 - The sidecar restore path has been measured end to end against a local
   8B MoE loader. The weight-resident half of the same architecture has not
   been measured, because no consolidated checkpoint exists yet.
+- The dream pipeline mechanics are tested, but the evidence uses a synthetic
+  consolidator and evaluator. No trained 50–100M checkpoint has been
+  consolidated; the six gate metrics have not been measured on a real model.
+- The PMC-mini Substrate Swap Test is negative on host B: v1 host A 5/8 and
+  host B 1/8, v2 host A 8/8 and host B 0/8, v3 host A 8/8 and host B 2/8, with
+  the v3 host-A control at 3/8. The state bytes are shared and both fused files
+  load, but the 8B adapter does not generalize to the unseen cues: it fits
+  22/22 v2 training cues in sample and 0/8 evaluation cues, while the v3
+  16-value state fits 15/30 training cues in sample and 2/8 evaluation cues.
+  The v3 evaluation facts were not used to tune the adapter. A positive
+  cross-host interface and the 50–100M PMC state are not measured.
 
 ## [0.1.0] - 2026-10-26
 

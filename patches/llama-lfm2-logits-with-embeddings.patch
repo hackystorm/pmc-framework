@@ -1,0 +1,22 @@
+diff --git a/src/models/lfm2.cpp b/src/models/lfm2.cpp
+--- a/src/models/lfm2.cpp
++++ b/src/models/lfm2.cpp
+@@ -274,12 +274,12 @@
+     cur = build_norm(cur, model.output_norm, NULL, LLM_NORM_RMS, -1);
+     cb(cur, "result_norm", -1);
+     res->t_embd = cur;
+ 
+-    if (!cparams.embeddings) {
+-        cur = build_lora_mm(model.output, cur, model.output_s);
+-        cb(cur, "result_output", -1);
+-
+-        res->t_logits = cur;
+-    }
++    // The caller needs h and logits from one decode; do not skip the output
++    // projection when embeddings are enabled.
++    cur = build_lora_mm(model.output, cur, model.output_s);
++    cb(cur, "result_output", -1);
++
++    res->t_logits = cur;
+ 
+     ggml_build_forward_expand(gf, cur);

@@ -14,7 +14,7 @@ pub mod tensor;
 
 pub use json::Json;
 pub use rng::Rng;
-pub use sha256::{sha256, sha256_hex};
+pub use sha256::{sha256, sha256_hex, Sha256};
 pub use tensor::Tensor;
 
 /// Version of the artifact format produced by the trainer.

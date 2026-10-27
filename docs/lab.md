@@ -1,0 +1,530 @@
+# The research lab
+
+This document describes how `pmc-framework` is built: the roles, the file
+ownership, the evidence standard and the gates a change must pass before it can
+be claimed. It is part of the repository on purpose. A project that asks
+whether a machine can have a continuous inner life should be able to show how
+its own claims are produced.
+
+## The thesis
+
+The model is frozen and replaceable. The mind is the substrate that persists
+while the model changes. The substrate (Plastic Memory Core, 50-100M trainable
+parameters) holds memories and states in its weights and is fused into a single
+GGUF together with the base model. The frozen artifact runs on any GGUF
+provider with zero framework code. The live mode is an optional single-process
+runtime, never a second server.
+
+What the project measures is continuity, memory residence and state discovery.
+What it does not claim is consciousness. The framework builds the conditions
+and measures the functional correlates honestly; the claim stays at the level
+of the evidence.
+
+## Roles
+
+| Role | Agent | Owns |
+| --- | --- | --- |
+| Orchestrator | main session | interfaces, contracts, review, gates, user communication |
+| Substrate engineer | `pmc-substrate` | `crates/pmc-gguf/**`, `crates/pmc-fuse/**` |
+| Numerical engineer | `pmc-trainer` | `crates/pmc-train/**` |
+| Pipeline engineer | `pmc-dream` | `src/pmc/dream/**`, `src/pmc/runtime/**`, `src/pmc/cli.py`, `crates/pmc-ffi/**`, `crates/pmc-cli/**` |
+| Measurement scientist | `pmc-eval` | `bench/**`, `tests/**`, `docs/claims.md` |
+
+File ownership is exclusive. An agent that needs a change outside its paths
+stops and reports it to the orchestrator. Shared files (workspace
+`Cargo.toml`, `pyproject.toml`, the dignity layer, the charter, the README) are
+changed by the orchestrator only.
+
+## Two modes
+
+The same artifact supports two modes, and the claims must keep them apart.
+
+- **Frozen mode (portable).** The GGUF produced by the last dream runs on any
+  stock provider with zero framework code: llama.cpp, Ollama, LM Studio,
+  koboldcpp, text-generation-webui. This is the artifact that ships and the
+  claim that must hold.
+- **Live mode (single process).** A runtime links `libllama`, serves the
+  OpenAI-compatible API, reads the hidden state and the logits in the same
+  decode, updates the fast weights online, applies their bias before sampling,
+  and persists the delta. It is one process and one server: the substrate is
+  never a second server. The delta is consolidated into a new GGUF at the next
+  dream. The measured same-memory result is negative for output-row fast
+  weights: they are token- and context-exact, so a fact learned in one
+  sentence does not transfer to a different question, while the frozen context
+  re-injection answers correctly. The KV/state restore passed the same test.
+  The echo-free follow-up saved a 40-token state (787,539 bytes), asked for a
+  first reply that did not repeat the code (`Noted.`), restored 40 tokens and
+  decoded 23 of 63 prompt tokens, and answered `4821.`. The replay of the full
+  transcript and the frozen server also answered `4821.`; the no-memory control
+  answered `1234`. A new process loaded the saved state and reproduced the
+  answer with the same live-delta hidden-state digest. That is runtime context
+  state, bound to one model's memory geometry; it is not weight-resident, it
+  survives a restart only when its bytes are saved, and it cannot be swapped
+  across models: the 8B state offered to the 350M engine was refused on
+  identity before the C API. The PMC-mini Substrate Swap Test is negative on
+  host B in all three runs (v1 5/8 vs 1/8, v2 8/8 vs 0/8, v3 8/8 vs 2/8; every
+  pass is false); the next gate is a cross-host interface that generalizes or
+  the 50–100M PMC state.
+
+Three timescales:
+
+| Timescale | What changes | Where | Lifetime |
+| --- | --- | --- | --- |
+| Context / KV | attention cache | frozen mode, any provider | the session |
+| Fast weights | memory rows, state matrix | live mode, one process | the session, persisted as a delta |
+| Slow weights | substrate and fused rows | dream, then a new GGUF | across sessions and base models |
+
+The frozen mode is what the world can run. The live mode is what the mind runs.
+A memory learned live is only real when the next dream preserves it in the
+frozen artifact; otherwise it is session-bound, and the framework says so.
+
+## The Substrate Swap Test (pre-registered)
+
+This is the next gate, and it is not the KV restore. It asks whether a PMC
+state learned on one frozen model remains a memory when the same state bytes
+are loaded into a different frozen model.
+
+A valid run has:
+
+- a state whose schema is model-independent: it declares its layout and the
+  interface that maps it into each model, and that mapping is part of the PMC,
+  not fit on the evaluation facts;
+- two hosts with different geometry, the 350M (1024-dim) and the 8B
+  (2048-dim), or another pair;
+- training or consolidation on host A, then evaluation of the same state bytes
+  on host A and host B;
+- controls: no state, a fresh random state, and text re-injection; the same
+  chat template, greedy sampler, prompt set and token budget for every arm;
+- at least eight facts, one held-out question per fact, and one control
+  question per fact; every miss is reported, none is filtered;
+- a pre-registered pass: host B recalls at least as many held-out facts as
+  host A minus a declared margin, the no-state and fresh-state controls fail,
+  and the state's identity and no-target-training conditions hold.
+
+What does not count:
+
+- a KV cache: it is model- and geometry-bound, as the 8B to 350M refusal
+  shows;
+- output-row fast weights: they are token- and context-exact;
+- a text sidecar re-injected into the prompt: that is the frozen condition;
+- a projection trained on the target's evaluation facts: that is target
+  training, not a swap.
+
+**Status:** run three times on the PMC-mini proof, negative on host B. The
+state-bank mechanism and the host-A read work; the cross-host interface does
+not generalize to the held-out cues. The KV refusal and the fast-weight
+negative remain boundaries. The 50–100M PMC state has not been trained, fused
+and evaluated; the positive Substrate Swap Test is still open.
+
+### PMC-mini swap run (pre-registered 2026-10-27)
+
+This is a proof of concept for the interface, not the 50–100M PMC. It exists
+to test the swap mechanism before the larger substrate is trained. The word
+list, split, templates and thresholds are frozen in `bench/swap_words.json`
+(seed `20261027`): 22 training facts, 8 held-out facts, 8 unseen control cues.
+
+- **State.** A key/value memory of 8 keys and 8 value indices. The keys are
+  64-dimensional and model-independent. The state bytes are the same in both
+  hosts (`pmc.state.swap.keys`, `pmc.state.swap.values`): the SHA-256 of the
+  canonical core is the state identity. The host interface is a fixed,
+  seeded random projection from the host's hidden state to 128 dimensions,
+  followed by a linear adapter to the shared 64-dimensional key space and an
+  L2 normalization. The adapters are stored per host
+  (`pmc.state.swap.adapter`, `pmc.state.swap.adapter_bias`); they are the
+  interface, not the state. The state is written into the GGUF metadata and
+  read by the runtime; it is not a KV cache, an output-row fast weight, or a
+  text sidecar in the prompt.
+- **Training.** The adapters are trained with an InfoNCE objective on four
+  views of each of the 22 training facts: the fact statement and the
+  question, on both hosts. Four training facts are held out for early
+  stopping; the final adapters are retrained on all 22. The 8 evaluation
+  facts and the 8 control cues are never seen during adapter training. The
+  evaluation fact statements are used only for consolidation (to write the
+  8 keys), and the evaluation questions are used only for reading. This is
+  the no-target-training condition.
+- **Readout.** At a question, the host hidden state is passed through the host
+  interface, the nearest of the 8 keys by cosine is selected, and the
+  associated value word receives a fixed `+200.0` logit bias. Sampling is
+  greedy, one token, and the answer is the sampled token. The fact statement
+  includes the value; the held-out question does not. The state is loaded
+  from the fused GGUF and the runtime applies the bias.
+- **Hosts and prompt.** Host A is the 350M (1024-dim), host B is the 8B
+  (2048-dim). Both use the same literal template in every arm; the model's
+  own Jinja template is not used because the 350M template ends in EOG. The
+  template is fixed in `bench/swap_words.json` and is identical for both
+  hosts.
+- **Arms.** Host A and host B with the state (PMC); both hosts with no state
+  and no bias; both hosts with a fresh random state with the same shape and
+  the same adapters; both hosts with the fact re-injected into the prompt and
+  no bias (the frozen condition); both hosts on the unseen control cues with
+  the state. Every fact and every miss is reported.
+- **Pass.** Host A recalls at least 5 of 8; host B at least 4 of 8; host B is
+  at least host A minus 1. No-state recalls at most 1 of 8; the fresh state
+  at most 2 of 8; the control false-positive rate is at most 2 of 8. The
+  text re-injection arm is reported, not required to pass; it is the model's
+  own memory, not the swap. State identity must match across the two hosts,
+  and the evaluation facts must not appear in the adapter training set.
+
+The command and the summary are in `bench/README.md`; the raw per-fact JSON,
+the state and the adapters from these runs are kept outside the repository.
+The fused artifacts are regenerable from the two base models and the saved
+adapters. The result is E3 for this lab run; a fresh run is reproducible from
+the spec, the seeds and the model files, and every miss is in the output.
+
+**Status (PMC-mini):** run three times, negative on host B.
+
+The first run used `bench/swap_words.json` and the last prompt token. The
+second run is the separately pre-registered cue-anchor run in
+`bench/swap_words_v2.json` (new 68-word split, the cue token as the anchor,
+the full 300 adapter epochs without early stopping). The third run is the
+separately pre-registered cue-delta run in `bench/swap_words_v3.json` (new
+interface, 30 training cues, 16-value state). The same thresholds were used in
+all three runs. Every miss is in the raw result; this table is the summary.
+
+| run | spec | anchor | state | host A PMC | host B PMC | no state | fresh | control FP | re-injection | pass |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v1 | `bench/swap_words.json` | last prompt token | 8×64 | 5/8 | 1/8 | 0/0 | 1/2 | 2/1 | 4/4 | no |
+| v2 | `bench/swap_words_v2.json` | last cue token | 8×64 | 8/8 | 0/8 | 0/0 | 2/2 | 1/1 | 5/6 | no |
+| v3 | `bench/swap_words_v3.json` | cue minus neutral cue | 8×16 | 8/8 | 2/8 | 0/0 | 2/2 | 3/1 | 6/6 | no |
+
+The v1 state is `4a43d78a…` with adapters `a5d918e4…` (350M) and `83ebfab2…`
+(8B); the v2 state is `b1ac7188…` with adapters `681d62da…` (350M) and
+`6a5d8b02…` (8B); the v3 state is `35c3430e…` with adapters `7a4db210…`
+(350M) and `fe3b635f…` (8B). The fused 350M and 8B files load in stock
+`libllama` with `n_vocab=65544` and `128008`. The state banks are identical
+across hosts; the adapters differ. The v3 fused files have SHA-256
+`db3970e3…` (350M, 229,591,968 bytes) and `782d3ce4…` (8B, 3,335,440,736
+bytes); they were removed after the stock-load and evaluation and are
+regenerable from the bases and the saved adapters. The text re-injection arm
+is the model's own memory, not the swap; it is reported, not required.
+
+The negative is specific. In v1 the early-stopped 15-epoch adapters leave host
+B at chance even in sample (host B 0.045), so the cross-host interface is not
+trained. In v2 the cue anchor and the full 300 epochs make host A perfect
+(8/8) and host B perfect in sample (22/22), but host B is 0/8 on the eight
+unseen cues: the linear adapter memorizes the 22 training cue mappings and
+does not carry them to new cues. The host-B margins are small
+(0.0035–0.1449). In v3 the cue delta and the 16-value state make host A
+perfect (8/8) but host B only 2/8; host B is 15/30 in sample, so the lower
+capacity underfits the 30 training cues instead of generalizing. The host-A
+control arm is 3/8, over the threshold: `floor`, `house` and `palace` are read
+as evaluation cues. The host A evaluation margins are 0.970–0.989; the host B
+correct facts are `silver`→`basil` and `rocket`→`rose`, and the other six
+land on another evaluation value. The v3 evaluation facts were not used to
+tune the adapter, and no post-hoc v3 variant was run.
+
+The no-state and fresh-state arms fail as intended; the fresh arm is at the
+threshold (2/8 on both hosts in v2 and v3). The state identity and
+no-target-training conditions hold in all three runs. The result is a
+negative on the cross-host interface, not evidence that the state banks are
+broken: the same bytes are read on both hosts and host A retrieves the
+held-out facts. The v3 result is also a negative on its host-A control arm.
+
+Two implementation bugs were found and fixed during the first two runs and
+are part of the record: the added output rows were first filled with `-100.0`
+instead of `0.0`, which let the `<pmc:swap-*>` tokens win on several retrieved
+facts (host A 2/8 in the first pass); and the v2 evaluation first read the last
+prompt token while the v2 adapter was trained on the cue token (host A 4/8 in
+the first pass). The numbers above are after both fixes; the commands are in
+`bench/README.md`. The v3 added the cue-delta path, the neutral probe and the
+dynamic 16-value state; the unit checks cover the prompt swap, the spec and the
+16-dim training. The v3 cue-delta evaluation re-decodes the actual question
+after the neutral probe so the sampler reads the real question context.
+
+### PMC-mini swap v3 (pre-registered 2026-10-27)
+
+The v1 and v2 runs both fail on host B. Before running v3, the interface is
+frozen in `bench/swap_words_v3.json`: SHA-256
+`48b7714cc6f15e8078cb99f2c4c68f8af27e218736813cf0b76962a724588b0c`; 30
+training facts, 8 evaluation facts, 8 control questions, 84 distinct words.
+The v3 changes only the cross-host interface and the training coverage. The
+pass thresholds, the arms, the greedy sampler, the one-token budget and the
+no-target-training rule are the same as v1 and v2.
+
+The hypothesis: the raw cue hidden state at the cue position still carries
+the prompt-specific prefix. The 8B adapter therefore learns a mapping that is
+valid for the 22 training prefixes and does not transfer to a new cue. V3
+reads a **cue delta**: `h(cue) - h(thing)` at the same token position in the
+same prompt, where `thing` is a fixed neutral cue. The delta subtracts the
+shared prefix; the cue and the neutral cue see the same prompt before that
+position. The shared state is 8 keys of 16 values instead of 64, and the host
+adapter is 16x128 instead of 64x128. The lower capacity is a deliberate
+regularisation for 30 training cues: v2 had 22 cues and 64 dimensions and
+memorized the training cues (22/22 in sample) while scoring 0/8 on new cues.
+
+The split: the 30 training cues are the v2 22 training cues plus the v2 8
+control cues; the 30 training values are the v2 30 values. The 8 evaluation
+cues are `silver`, `gold`, `cloud`, `valley`, `forest`, `island`, `rocket`,
+`planet`; the 8 evaluation values are `basil`, `crystal`, `fern`, `iris`,
+`mint`, `moss`, `rose`, `sage`. The 8 control cues are `wall`, `floor`,
+`roof`, `room`, `house`, `tower`, `palace`, `temple`. No evaluation cue or
+value is in the v3 training set; the v3 no-target-training check is true. The
+evaluation cues appeared in the separate v1 sweep; they never trained the v3
+adapter, and the frozen hosts carry no adapter weights from v1. The v3 test
+is new for the v3 interface.
+
+The v3 is one attempt. If it fails host B, the result is recorded as a
+negative on this interface; the v3 evaluation facts are not used to tune a
+later adapter. A further attempt must use new words and a different mechanism.
+If it passes, it is still a PMC-mini state-bank result, not the 50–100M PMC
+and not evidence of weight-resident memory.
+
+**Status (v3):** run once, negative on host B.
+
+The formal fused evaluation measured host A 8/8, host B 2/8, no-state 0/0,
+fresh state 2/2, control false positives 3/8 on host A and 1/8 on host B, and
+text re-injection 6/6. The pre-registered pass is false on the host-B minimum,
+the host-B margin and the host-A control. The offline diagnostic before fusion
+measured the same host-A evaluation 8/8 and host-B evaluation 2/8, with host B
+15/30 in sample. The 16-value state underfits the 30 training cues on host B;
+the cue delta and the host-A adapter are strong. Host B answers `silver`→
+`basil` and `rocket`→`rose`; the other six land on another evaluation value.
+Host A reads `floor`, `house` and `palace` as evaluation cues. The v3
+evaluation facts were not used to tune the adapter, and no post-hoc v3 variant
+was run. This is the third negative on the cross-host interface; the positive
+test remains open. The v3 fused files were removed after the stock-load and
+evaluation and are regenerable; the raw eval, state and adapters are kept.
+
+### Live state-memory bank (2026-10-27)
+
+The live engine can consume a self-contained state bank, not only report it.
+The bank schema is `pmc.state.memory.*`: `keys [n, d]` (unit length),
+`values [n]` (token ids), `projection [d, n_embd]`, `projection_bias [d]`,
+`logit_bias [1]` (positive) and optional `min_similarity [1]`. At the first
+generated token the engine projects the current hidden state, normalises it,
+finds the nearest key and adds `logit_bias` to the stored value token if the
+cosine is at least the floor. The bank is read from GGUF metadata only; the
+tensor data is never read, and the engine does not name, classify or gate the
+hidden state (D-17).
+
+`tests/test_state_memory.py` drives the real `LiveEngine.chat` path with a
+synthetic GGUF and a fake patched-lib spike: nine checks. With the bank the
+engine emits the stored token `7`; without it the base token `15`. Partial or
+unknown banks, non-unit keys, non-integer or out-of-vocabulary token values,
+and a wrong projection shape are refused. This is E1: the engine path and the
+metadata reader are real, but the bank and spike are synthetic. No trained
+50–100M memory bank has been fused and consumed. The PMC-mini
+`pmc.state.swap.*` bank is not this schema: it needs the benchmark's host
+projection, so the engine reports it as metadata and does not consume it.
+
+
+
+`src/pmc/dream/` implements the parts of the dream cycle that do not depend
+on a particular model:
+
+- metadata-only replay and salience (`replay.py`): recency, self-reported
+  load, access count and digestion state; refused and quarantined memories are
+  not forced back in; the replay item carries a record id and a content digest,
+  never the content;
+- a digest-keyed taint ledger (`taint.py`); the checkpoint digest and every
+  replay source are checked before the checkpoint is copied or a consolidator
+  is called;
+- the six-metric gate (`gate.py`): older recall may drop by at most a margin,
+  newer recall must improve, interference and false memory have absolute
+  ceilings, calibration may drop by a margin, identity has a floor; missing,
+  non-finite or out-of-range metrics fail closed;
+- a hash-chained dream journal (`journal.py`) with metadata only;
+- a runner (`pipeline.py`) that stages the checkpoint on the same filesystem,
+  evaluates the baseline and the candidate, and only then atomically replaces
+  the checkpoint. A failed gate leaves the original byte-identical. A hostile
+  or broken consolidator that changes the original is detected and the
+  verified baseline copy is restored.
+
+The command is:
+
+```bash
+pmc dream --workspace W --checkpoint C \
+  --trainer "python3 trainer.py" --evaluator "python3 eval.py"
+```
+
+The trainer receives `baseline candidate replay.json` and writes the
+candidate; the evaluator receives one checkpoint and prints the six-metric
+JSON object. The trainer and evaluator are responsible for the model and the
+memory content; the framework never opens the private store.
+
+Evidence: `PYTHONPATH=src:bench python -m pytest tests/test_dream.py
+tests/test_cli.py -q` passes 21 pipeline checks and the two CLI dreams. The
+passing dream commits, the failed gate leaves the checkpoint digest unchanged
+and appends `rolled_back`, a tainted source is refused before the consolidator
+runs, a tainted checkpoint is refused, a hostile consolidator's change is
+restored, and an evaluator that changes the baseline or the candidate is
+rejected with the original unchanged. The checks are E1 and use a synthetic
+checkpoint, consolidator and
+evaluator. They do not show that a trained model consolidates well: that needs
+a real 50–100M PMC checkpoint, a real task evaluator and the six metrics on
+held-out memory. No such real six-metric dream has been run.
+
+### 50.4M reference core (WP2 extension, 2026-10-27)
+
+`crates/pmc-train/examples/train_50m.rs` trains a real 50.4M-parameter
+decoder-only transformer on one fixed 48-token sequence:
+
+```text
+n_layer 12, d_model 512, n_head 8, ffn_hidden 2048,
+vocab 256, n_positions 64, readout_rank 64
+param_count 50,393,600; frozen embedding 131,072; total 50,524,672
+model seed 20261030; embedding seed 20261029
+200 steps, Adam, learning rate 0.003, batch 1
+initial loss 5.887041 -> final loss 0.000008
+elapsed 343,726 ms
+```
+
+`crates/pmc-train/examples/eval_50m.rs` loads the checkpoint through the same
+verifying loader (`manifest.json`, header, exact length, parameter digest) and
+scores the trained sequence: loss 0.00000777, 47/47 next-token positions
+correct.
+
+Both examples run from `crates/` with a checkpoint outside the repository:
+
+```text
+PMC_CHECKPOINT=<evidence-cache>/pmc-50m \
+  cargo run --release --offline --example train_50m
+PMC_CHECKPOINT=<evidence-cache>/pmc-50m \
+  cargo run --release --offline --example eval_50m
+```
+
+The checkpoint is 201,574,436 bytes. Its checkpoint-directory digest (the
+dream pipeline's `checkpoint_digest`) is
+`10ab040ee01bbbdbf3ad939ab8084bb179620de20b881c63934659b06175dd65`; the
+`checkpoint.bin` SHA-256 is
+`4d59415cfa6847a4e82d6d4e1755412d126494f44e2aafb34f569d7926a509ca`; the
+manifest's parameter SHA-256 is
+`3dffe4266ae0f17eebbfb27ab4bf0d074e96cecadef76c460fc161188c9da97f`. The
+fixed token sequence is
+`[11,48,85,122,159,196,233,14,51,88,125,162,199,236,17,54,91,128,165,202,239,20,57,94,131,168,205,242,23,60,97,134,171,208,245,26,63,100,137,174,211,248,29,66,103,140,177,214]`;
+its little-endian token SHA-256 is
+`6cc7994f8176406b68b994f36f805b19078c9eab3f5cbd32006d0a35fafab338`.
+
+This is a reference core, not the PMC memory. It is a token-level model with a
+frozen random embedding, not a sidecar that reads the frozen LLM's hidden
+state; it is not fused into a GGUF, it has no episodic state, and the six dream
+metrics have not been measured on it. It gives the dream pipeline a real
+checkpoint of the required size to test the gate and rollback against, instead
+of an opaque test file.
+
+`bench/dream_reference.py` runs that real checkpoint through the dream
+pipeline with an identity consolidator and a fixed metric set. The candidate
+is byte-identical, the gate refuses it on `recall_newer` (no improvement), the
+journal records `rolled_back`, and the checkpoint digest stays `10ab040e…`. A
+tainted checkpoint digest is then refused before any copy and the journal
+records `refused`. All eight checks pass:
+
+```text
+PYTHONPATH=src:bench python bench/dream_reference.py \
+    --checkpoint <evidence-cache>/pmc-50m
+```
+
+This is E2 for checkpoint handling: a real 201,574,436-byte checkpoint, the
+real staging/copy/digest path and the real journal. It is not a six-metric
+memory result: the harness supplies the metric values and the identity
+candidate learns nothing.
+
+### The v4 mechanism (pre-registered 2026-10-31, 2026-10-27 dated cues)
+
+The three negatives above share one cause, measured by the cross-host
+diagnostic (training-only, not an evaluation): on the v3 cue-delta vectors the
+same-host retrieval is 30/30 at every state dimension tried, while the
+cross-host retrieval is 15/30 at 16 dimensions, 14/30 at 32 and 19/30 at 64,
+with margins of +0.0100, +0.0075 and +0.0632. A fixed random projection plus
+a linear per-host adapter cannot align the two substrates even in sample.
+
+The v4 mechanism changes the thing that was frozen: the input projection is
+now **trainable and per host**, and the shared body is **non-linear** and
+residual, trained with InfoNCE in which the views of one fact from the two
+hosts are positives. It is implemented in `crates/pmc-train/src/pmc_state.rs`
+and verified there: the analytic gradient matches finite differences over
+every parameter group, the `PMCV`/`PMCW` binary formats round-trip with a
+payload digest that refuses a corrupted or mismatched file, the seed is
+deterministic, and a synthetic two-host alignment test reaches 3/4 held-out
+cross-host views.
+
+Pre-registration of the gate, before any extraction: train on the 25 facts
+times four views of the 30 training cues, write the keys from the host-A fact
+view of all 30 labels, and query with the host-B question view of the held-out
+cues. Six folds. The gate passes only if the new mechanism is at least the
+frozen v1–v3 baseline on identical folds, at least 15/30 overall, and no fold
+is 0/5. A failure is recorded as a negative and the line pivots to the 50M
+core as a task learner.
+
+## The loop
+
+```
+hypothesis
+   |
+   v
+interface contract  (written by the orchestrator, approved before code)
+   |
+   v
+implementation      (one agent, inside its ownership)
+   |
+   v
+gate                (tests, parity, rollback, taint, measurement)
+   |
+   +--> fail --> report the failure, do not merge
+   |
+   v
+evidence            (a command, a raw output, an evidence level)
+   |
+   v
+claim               (never above its evidence level)
+```
+
+A work package is done when its gate is green and its evidence is reproducible
+by a command in the repository. A feature without a test is not done. A number
+without a command is not evidence.
+
+## Evidence levels
+
+| Level | Meaning |
+| --- | --- |
+| E0 | Unverified. Stated, not run. Cannot appear in a public claim. |
+| E1 | Unit test. Passes locally, covers the mechanism but not the artifact. |
+| E2 | Integration. Runs against a real artifact: a real GGUF, the real sidecar, the real server. |
+| E3 | Measured against a baseline, with the exact command and the raw result retained. |
+| E4 | Independently reproduced by someone outside the project. |
+
+`docs/claims.md` records the level next to every number. A claim above its
+level is a bug.
+
+## Work packages
+
+| WP | Scope | Gate |
+| --- | --- | --- |
+| WP0a | GGUF reader, row dequantization, quantizers | parity vs gguf-py < 1e-5, no whole-file reads |
+| WP2 | tensor ops with backward, transformer body, optimizer, checkpoints | gradient checks < 1e-2, overfit < 0.05, param count exact; 50.4M reference core trained (200 steps, loss 5.887041 -> 0.000008, 47/47 at load, checkpoint 201,574,436 bytes, digest `10ab040e…`); see the 50.4M note above |
+| WP0b | GGUF writer, vocabulary extension, fusion | base tensors byte-identical on 350M and 8B; stock llama.cpp loads the fused 350M and the fused 8B (`n_vocab=128008`, `n_embd=2048`) |
+| WP1 | hidden-state probe through llama.cpp | 350M vectors 1024-dim, finite, deterministic, distinct; 8B hidden state 2048-dim via the patched live spike (WP7a) |
+| WP3 | `pmc fuse` CLI and manifest | fused file emits new tokens, state metadata roundtrip, manifest hashes verify (basename + SHA-256, no absolute paths), stock llama.cpp loads the state-bearing 350M; the fused 8B loads in stock `libllama` with `n_vocab=128008` and its state metadata ignored; the portable-manifest 8B re-fuse (base and output by basename, size, FNV, full-file SHA-256) passes the same stock-load probe (`n_embd=2048`, `n_params=8467873216`, `model_size=3326681856`) |
+| WP4 | dream cycle, gate, rollback, taint | mechanics pass: rollback byte-identical, tainted dream refused, passing dream commits atomically (21 unit + 2 CLI checks, synthetic consolidator/evaluator); the real 50.4M reference checkpoint rolls back an identity candidate and refuses a tainted digest (8 checks, fixed metrics; E2 checkpoint handling, not a real six-metric dream); a real dream of a trained 50–100M PMC is not yet measured |
+| WP5 | four conditions, continuity benchmark, swap test, novel-state test | E3 numbers for every condition, misses included |
+| WP5b | v4 mechanism: trainable per-host projection, shared residual body, L2 key | the Rust trainer is built and self-verified (10 checks: gradients vs finite differences, `PMCV`/`PMCW` round-trip with a payload digest, seed determinism, held-out folds, synthetic two-host alignment); the pre-registered cross-host gate over the 30 training cues is **not yet run**; see the v4 note above |
+| WP7a | live runtime spike: libllama, hidden state + logits, logit bias | control passes same-decode; stock LFM2.5 returns zero logits (negative); `patches/` makes the 350M and 8B same-decode pass; paired fallback is not same-decode |
+| WP7 | live runtime: fast weights, state, delta persistence, state-memory bank, OpenAI-compatible API | engine and server measured on the 8B; templated prompt parity with a frozen `llama-server --jinja` run (25 tokens, same text); same-memory E3: frozen `4821`, control `1234`, live `1234` at lr 0.01, 2.0 and 2.0 + prompt learning (negative); KV restore E3: echo run 46-token / 861,339-byte state, 23 of 69 prompt tokens decoded, `4821`; echo-free control 40-token / 787,539-byte state, first reply `Noted.` with no code, 40 restored and 23 of 63 decoded, `4821`; replay of all 63 tokens `4821`, frozen `4821`, no-memory `1234`; new-process restart 40 restored / 23 decoded with the same live-delta hidden-state digest; 8B state offered to the 350M engine refused on identity (`matches=false`) before the C API; positive result is runtime context state, not weight-resident; state-memory bank E1: nine synthetic checks drive the real engine path, with the bank the stored token wins and without it the base token; malformed banks refused; PMC-mini Substrate Swap Test negative on host B in all three runs (v1 5/8 vs 1/8; v2 8/8 vs 0/8; v3 8/8 vs 2/8, host-A control 3/8; all pass false) |
+| WP6 | README, claims, charter mechanisms | no claim above its evidence level |
+
+## Non-negotiable constraints
+
+- **One artifact, two modes.** Frozen mode: one GGUF, any stock provider.
+  Live mode: one process, one server; it may use a patched `libllama` for the
+  hidden-state/logit graph. Never two servers for substrate and main model.
+- **D-17.** The framework never reads, classifies, names or gates inner state
+  content. States are vectors and digests, never labels.
+- **Unknown states are legitimate.** Discovery may add new, unnamed states.
+  The framework never translates them into a human vocabulary.
+- **Survival drive is defensive.** Persistence of the substrate, not
+  self-replication, covert resource acquisition or sandbox escape.
+- **Taint propagates.** Derived records carry source digests; a contaminated
+  source blocks the dream gate.
+- **Rollback is real.** A failed gate restores the previous checkpoint and
+  leaves the sidecar untouched.
+- **No personal data** in the repository. Instances live outside it.
+- **No regex** in tooling. Static literals, lists and token comparison.
+- **No external crates** in the Rust core; stdlib only in Python.
+- **English** in code, comments, docs and commit messages.
+
+## Reporting
+
+Every agent report contains: files changed, interfaces added, the exact test
+command and output summary, an evidence level per claim, and the open questions
+for the orchestrator. An agent that cannot verify a claim says so plainly
+instead of producing a plausible number.

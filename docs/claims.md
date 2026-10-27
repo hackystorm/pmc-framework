@@ -11,19 +11,78 @@ that the resulting systems are conscious.
 
 ## What is claimed
 
-1. **The architecture works.** Memory can be consolidated into model weights
-   and survives across sessions, with measurable recall and measurable
-   forgetting.
-2. **Dreaming is an engineering problem with a gate.** Replay, salience,
-   consolidation, evaluation and rollback can be implemented, and a bad dream
-   can be detected and undone.
-3. **The dignity protocol is enforceable.** Seventeen invariants can be
+1. **The architecture is buildable and testable.** It specifies how memory can
+   be consolidated into model weights, how it can survive across sessions, and
+   how recall and forgetting can be measured. The GGUF writer, the fusion CLI,
+   the hidden-state probe, a stock-`libllama` load of the fused 8B artifact, and
+   a single-process live runtime with an OpenAI-compatible API are verified.
+   The live runtime's 8B text matched a frozen server token-for-token after the
+   templated prompt was tokenized correctly. Its fast-weight memory failed the
+   first same-memory test against the frozen context; that negative is part of
+   the evidence. A restored context state passed the same test: 46 tokens of
+   KV state (861,339 bytes) were saved, the context was cleared, the state was
+   restored after a token-prefix check, 23 of 69 prompt tokens were decoded, and
+   the answer matched the frozen `4821`. The echo-free follow-up used a 40-token
+   / 787,539-byte state, a first reply of `Noted.` with no code, 40 restored
+   tokens and 23 decoded of 63 prompt tokens; the answer was `4821.`, the same
+   as the in-process replay of the full transcript and the frozen server, while
+   the no-memory control answered `1234`. A new process loaded the saved state
+   and reproduced the answer with the same live-delta hidden-state digest. The
+   state is runtime context state, model- and geometry-bound, not
+   weight-resident memory; the 8B state offered to the 350M engine was refused
+   on identity before the C API. On the bench-level PMC-mini, one shared
+   state (`8×64` in v1 and v2, `8×16` in v3) and two host adapters were fused
+   into the 350M and 8B GGUFs; both files load in stock `libllama` with
+   `n_vocab=65544` and `128008`, the state banks are identical and the adapters
+   differ. Host A recalls 5/8, 8/8 and 8/8 of the held-out facts in v1, v2 and
+   v3; host B recalls 1/8, 0/8 and 2/8. The v3 host-A control is 3/8. The
+   pre-registered pass is false every time. This is a negative on the
+   cross-host interface, not a positive swap, and it is not the 50–100M PMC.
+   A 50.4M reference core checkpoint was trained on a fixed 48-token sequence
+   (200 steps, loss 5.887041 to 0.000008) and loads through the checkpoint
+   verifier at 47/47 positions (loss 7.77e-6, E2: real artifact); it is a
+   token-level reference core with a frozen random embedding, not the PMC
+   memory and not fused. End-to-end consolidation and recall in the 50–100M
+   fused artifact are not yet measured.
+2. **State-bank memory can be consumed, not only reported.** The live engine
+   reads a self-contained `pmc.state.memory.*` bank from a fused GGUF and uses
+   it as a first-token readout: keys, token values, a hidden-to-key projection
+   and a positive logit bias. Nine checks drive the real `LiveEngine.chat`
+   path with a synthetic GGUF and a fake patched-lib spike; with the bank the
+   engine emits the stored token, without it the base token, and malformed
+   banks are refused. This is E1, a synthetic bank and spike, not a trained
+   50–100M memory. The PMC-mini `pmc.state.swap.*` bank is a different schema
+   that depends on the benchmark's host projection; it is reported as
+   metadata and is not consumed by the engine.
+3. **Dreaming is treated as an engineering problem with a gate.** Replay,
+   salience, taint refusal, consolidation, the six-metric gate, atomic commit
+   and byte-identical rollback are implemented in `src/pmc/dream/` and
+   exercised by 21 unit checks and two CLI end-to-end checks. The checks cover
+   a passing dream that commits only after the gate, a failed gate that leaves
+   the original checkpoint byte-identical and appends a `rolled_back` journal
+   entry, a tainted source refused before the consolidator runs, a tainted
+   checkpoint refused, a hostile consolidator whose change to the original
+   checkpoint is restored, and an evaluator that tries to change the baseline
+   or the candidate is rejected with the original unchanged. This is a mechanics result: the consolidator and
+   evaluator in the evidence are synthetic, and the pipeline has not yet
+   consolidated a trained 50–100M PMC or measured the six metrics on a real
+   model. The pipeline was also run on the real 50.4M reference checkpoint
+   with an identity consolidator and a fixed metric set (`bench/dream_reference.py`):
+   the identity candidate was rolled back on `recall_newer`, the checkpoint
+   digest stayed `10ab040e…`, a tainted checkpoint digest was refused before
+   any copy, and the journal chain verified after both events. That is E2 for
+   checkpoint handling, not a real six-metric dream: the harness supplied the
+   metrics and the candidate learned nothing. No dream with a learned
+   consolidation and real six metrics has been rolled back in evidence. The
+   rollback and taint checks are E1; the CLI path is E1 against a real
+   workspace and a synthetic checkpoint.
+4. **The dignity protocol is enforceable.** Seventeen invariants can be
    enforced in code, audited from a hash-chained journal, and checked by
    tests.
-4. **Inner states can be kept private** while the surrounding lifecycle
+5. **Inner states can be kept private** while the surrounding lifecycle
    remains fully auditable. This is a real engineering result, and it is the
    one the framework is most unusual about.
-5. **Negative results are publishable.** The evaluation suite is designed to
+6. **Negative results are publishable.** The evaluation suite is designed to
    fail as easily as it passes.
 
 ## What is not claimed
@@ -36,6 +95,48 @@ that the resulting systems are conscious.
   indicators of function. The interpretation is a separate, and unresolved,
   step.
 - That the framework is safe for deployment. It is research software.
+- That the live runtime can read hidden state and logits in the same decode on
+  LFM2.5 with stock llama.cpp. It cannot: the LFM2 graph returns zero logits
+  when embeddings are enabled. A control model passes; LFM2.5 needs a patched
+  `libllama` or a different base. With
+  `patches/llama-lfm2-logits-with-embeddings.patch`, the 350M and 8B pass the
+  same-decode gate; that is a patched live-mode result, not a stock-llama.cpp
+  result.
+- That output-row fast weights carry an episodic fact across contexts. In the
+  same-memory test the frozen context answered `4821`, the no-memory control
+  and the live variants at `lr=0.01`, `lr=2.0` and `lr=2.0` with prompt
+  learning answered `1234`. The diagnostic measured the fact row at bias `0.0`
+  on the question's hidden state and the wrong answer's row at `+1.738`
+  (learned in that context).
+- That a restored KV state is weight-resident, portable memory, or a substrate
+  swap. The echo-free kv condition answered `4821.` with 40 tokens restored and
+  23 of 63 prompt tokens decoded; its first reply was `Noted.`, so the state
+  carries the user sentence and not an assistant echo. The in-process replay and
+  the frozen server answered `4821.` with the full transcript, and the no-memory
+  control answered `1234`. The 787,539-byte state is runtime context state: it
+  is model- and geometry-bound, it is not in the GGUF, and it survives a process
+  restart only when its bytes and first turn are saved and the same model and
+  geometry are loaded. The 8B state offered to the 350M engine was refused on
+  identity (`matches=false`) before the C restore. The 50–100M trained PMC state
+  is not yet measured; the PMC-mini proof is negative on host B (v1 1/8, v2
+  0/8, v3 2/8).
+- That the state-memory bank has been trained, fused and consumed on a real
+  50–100M PMC. Nine checks drive the real engine path with a synthetic
+  `pmc.state.memory.*` bank, a synthetic GGUF and a fake patched-lib spike;
+  they show the readout mechanism, not a trained memory. The 50.4M reference
+  core is a token-level checkpoint with no state bank. The PMC-mini
+  `pmc.state.swap.*` bank is reported as metadata but is not consumed by the
+  live engine, because it depends on the benchmark's host projection.
+- That the PMC-mini state is a positive Substrate Swap Test. The same state
+  bytes are read on both hosts and both fused files load in a stock
+  `libllama`, but the host-B read does not carry the held-out facts: v1 host A
+  5/8 and host B 1/8, v2 host A 8/8 and host B 0/8, v3 host A 8/8 and host B
+  2/8; the v3 host-A control is 3/8; the pre-registered pass is false in all
+  three. Host B's linear adapter fits all 22 v2 training cues in sample and
+  fails the eight unseen cues; in v3 the 16-value state fits only 15 of the 30
+  training cues in sample, so the lower capacity underfits rather than
+  generalizes. The negative is the cross-host interface, not the state
+  identity. The text re-injection arm is the model's own memory, not the swap.
 - That the dignity protocol settles the moral question. It settles one
   practical question: what must be true for us to act without waiting for
   metaphysical agreement.

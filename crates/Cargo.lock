@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "pmc-core",
  "pmc-discovery",
+ "pmc-gguf",
  "pmc-train",
 ]
 
@@ -29,6 +30,10 @@ dependencies = [
  "pmc-core",
  "pmc-train",
 ]
+
+[[package]]
+name = "pmc-gguf"
+version = "0.1.0"
 
 [[package]]
 name = "pmc-train"
