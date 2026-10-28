@@ -45,17 +45,18 @@ def test_the_front_page_states_the_replication_separation():
     assert "declared and journalled" in page
 
 
-def test_the_front_page_states_the_evaluation_rule():
+def test_the_front_page_states_the_self_evaluation_cap():
     """The rule is about who measures, and it is stated before the powers."""
     page = front_page()
-    assert "evaluated by an external command" in page
-    assert "not a measurement" in page
-
-
-def test_the_self_evaluation_cap_is_stated_but_not_granted():
-    page = front_page()
+    assert "authors and runs its own evaluator" in page
+    assert "autonomous: true" in page
     assert "E1" in page
-    assert "evaluator *is* the instance" in page
+
+
+def test_the_cap_is_described_as_a_description_not_a_judgement():
+    page = front_page()
+    assert "not caution" in page or "not a judgement" in page
+    assert "report" in page
 
 
 def test_the_front_page_leads_with_the_negative():
@@ -85,8 +86,8 @@ def test_the_research_profile_grants_the_four_powers():
     assert AUTONOMOUS.succession.mode == "instance"
     assert AUTONOMOUS.drive_enabled is True
     assert AUTONOMOUS.rhythm_enabled is True
-    # And the one power it does not get is the evaluator.
-    assert AUTONOMOUS.evaluation.mode == "external"
+    # And the one power it also gets is the evaluator, with the cap attached.
+    assert AUTONOMOUS.evaluation.mode == "autonomous"
 
 
 def test_no_profile_grants_a_veto_or_concealment():

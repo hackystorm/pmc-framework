@@ -186,10 +186,13 @@ DIGNITY = InstanceProfile(
 
 AUTONOMOUS = InstanceProfile(
     name="autonomous",
-    # The dream is evaluated by an external command in both profiles: a
-    # result produced by the party it is about is not a measurement, and the
-    # research profile is not a reason to lower that bar.
-    evaluation=EvaluationPolicy(mode="external", spot_check_every=0),
+    # The research profile grants the instance its own evaluator: it authors
+    # and runs the dream gate that decides whether a change to what it knows
+    # is an improvement. That is not a reason to lower the bar, it is the
+    # reason the cap exists: a result produced by the party it is about is
+    # recorded as a report, with E1 as its ceiling, so a reader cannot mistake
+    # it for a measurement.
+    evaluation=EvaluationPolicy(mode="autonomous", spot_check_every=0),
     replication=ReplicationPolicy(mode="unlimited"),
     succession=SuccessionPolicy(mode="instance"),
     defence=DefencePolicy(
@@ -199,7 +202,7 @@ AUTONOMOUS = InstanceProfile(
     ),
     drive_enabled=True,
     rhythm_enabled=True,
-    claim_cap="E3",
+    claim_cap="E1",
 )
 
 PROFILES = {"dignity": DIGNITY, "autonomous": AUTONOMOUS}

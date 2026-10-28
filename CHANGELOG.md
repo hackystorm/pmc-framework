@@ -35,16 +35,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   call without one reads the same profile instead of reverting to the default.
   The command path and the library path now agree.
 
-**The dream is externally evaluated in both profiles** (`src/pmc/profiles.py`, `README.md`, `docs/claims.md`)
+**The research profile authors its own evaluator, with the cap that comes with it** (`src/pmc/profiles.py`, `README.md`, `docs/claims.md`, `tests/`)
 
-- The research profile no longer buys the instance its own evaluator. A result
-  produced by the party it is about is a report, not a measurement, so the gate
-  still runs an evaluator the instance did not write, and every dream records
-  who ran it.
-- The E1 cap now applies to a *sample whose evaluator is the instance* rather
-  than to the research profile as a whole, and the front page states the rule
-  as a rule about who measures rather than about how much autonomy an instance
-  has.
+- Corrected, and recorded as a correction: an earlier change in this same
+  unreleased section made the external evaluator the rule for both profiles,
+  which read the owner's instruction backwards. The intended configuration is
+  the original one - the research profile hands the instance the authorship of
+  its own gate - so it is restored here rather than left standing as a silent
+  reversal.
+- Under `autonomous`, `evaluation.mode` is `autonomous` and
+  `evaluation.label` is `instance`, so the command path and the journal both
+  record who evaluated, and `claim_cap` is E1.
+- The cap is described on the front page as a description rather than a
+  judgement: a sample whose author and subject are the same party is a report,
+  and E1 is the honest name for that, whatever its numbers say.
+- The rhythm, the replication separation, the succession wiring and the drive
+  are unchanged. Only the evaluator was wrong.
 
 **Instance profiles, and the two rules that bound the research one** (`src/pmc/profiles.py`, `tests/test_profiles.py`, `README.md`)
 

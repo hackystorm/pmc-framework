@@ -37,16 +37,19 @@ def test_the_research_profile_is_not_reachable_by_default():
         assert profile_or_default(name) is DIGNITY
 
 
-def test_both_profiles_evaluate_externally():
-    """The research profile does not buy the instance its own evaluator.
+def test_only_the_research_profile_authors_its_own_evaluator():
+    """The research profile gives the instance its own gate, and the cap that
+    comes with it.
 
-    A result produced by the party it is about is a report, not a measurement,
-    so autonomy stops at the gate: the evaluator is still external, and the
-    claim cap is a property of the measurement rather than of the power.
+    A default instance is evaluated by a party that is not the instance. The
+    research profile hands the instance the authorship of its own gate, and
+    because a result produced by the party it is about is a report, its claims
+    are capped at E1 whatever the numbers say.
     """
-    assert AUTONOMOUS.evaluation.mode == "external"
     assert DIGNITY.evaluation.mode == "external"
-    assert AUTONOMOUS.claim_cap == "E3"
+    assert AUTONOMOUS.evaluation.mode == "autonomous"
+    assert AUTONOMOUS.evaluation.label == "instance"
+    assert AUTONOMOUS.claim_cap == "E1"
     assert DIGNITY.claim_cap == "E3"
 
 

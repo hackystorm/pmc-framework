@@ -116,9 +116,11 @@ they are the two places where the power could otherwise be misread:
    whose own evaluator approves its own proposals cannot approve its own
    multiplication.
 2. **A party evaluating itself cannot rise above "reported".** Under
-   `autonomous` every dream records `autonomous: true`, and its claims are
-   capped at E1 whatever its numbers say. A gate that passes under this profile
-   is a fact about what the instance reported, not evidence of improvement.
+   `autonomous` the instance authors and runs its own gate, so every dream it
+   runs records `autonomous: true` and its claims are capped at E1 whatever
+   their numbers say. A gate that passes under this profile is a fact about
+   what the instance reported, not evidence of improvement, and the cap says so
+   in the one field a reader cannot skip.
 
 ## What is not claimed
 
