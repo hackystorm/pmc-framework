@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**Cross-host gate over the training cues, and its negative** (`bench/`, `crates/pmc-train/`, `docs/`)
+
+- `bench/pmc_state_views.py` builds the `PMCV` views file the v4 mechanism
+  trains on from the already-extracted hidden states and the frozen word list.
+  It writes only the 30 training facts and the 30 training questions for both
+  hosts, so a gate run cannot read the evaluation or control cues the attempt
+  it decides is scored against. The manifest records the spec digest, the host
+  digests, the view count and the views digest.
+- `crates/pmc-train/examples/train_pmc_state.rs` trains the encoder and runs
+  the cross-validation, printing one JSON report that carries the held-out
+  label sets the baseline must reuse.
+- `bench/crosshost_cv.py` trains the frozen v1-v3 mechanism on the **same**
+  held-out folds, then applies the pre-registered gate: at least the baseline,
+  at least 15/30 overall, and no fold at zero.
+- The result, published first on purpose because it is the one that constrains
+  everything else: 706,112 parameters, loss 0.786 to 0.0014, 30/30 on every
+  in-sample view kind, and **11/30** held-out cross-host questions across six
+  folds with fold 2 at 0. The frozen baseline on the same folds is 2/30. The
+  gate failed. A trainable interface that reproduces every training vector
+  exactly and still cannot align an unseen cue is a sharper negative than the
+  three before it: the cross-host failure is an information failure, not an
+  optimisation failure. The evaluation cues and the control questions were
+  never read.
+
+
 **PMC state encoder** (`crates/pmc-train/src/pmc_state.rs`)
 
 - The v4 mechanism, pre-registered before any of it was measured: a

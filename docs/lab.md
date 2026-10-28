@@ -419,7 +419,7 @@ real staging/copy/digest path and the real journal. It is not a six-metric
 memory result: the harness supplies the metric values and the identity
 candidate learns nothing.
 
-### The v4 mechanism (pre-registered 2026-10-31, 2026-10-27 dated cues)
+### The v4 mechanism (pre-registered 2026-10-31)
 
 The three negatives above share one cause, measured by the cross-host
 diagnostic (training-only, not an evaluation): on the v3 cue-delta vectors the
@@ -438,13 +438,39 @@ payload digest that refuses a corrupted or mismatched file, the seed is
 deterministic, and a synthetic two-host alignment test reaches 3/4 held-out
 cross-host views.
 
-Pre-registration of the gate, before any extraction: train on the 25 facts
-times four views of the 30 training cues, write the keys from the host-A fact
-view of all 30 labels, and query with the host-B question view of the held-out
-cues. Six folds. The gate passes only if the new mechanism is at least the
-frozen v1–v3 baseline on identical folds, at least 15/30 overall, and no fold
-is 0/5. A failure is recorded as a negative and the line pivots to the 50M
-core as a task learner.
+The gate was pre-registered as follows, before any extraction: train on the
+30 training facts' four views (120 views, 706,112 parameters, architecture
+`p128h256l2k64`, seed 20261031, 300 epochs), write the keys from the host-A
+fact view of all 30 labels, and query with the host-B question view of the
+held-out cues across six folds. It passes only if the new mechanism is at
+least the frozen v1-v3 baseline on identical folds, at least 15/30 overall,
+and no fold is 0/5.
+
+**Result (2026-10-28), and it is a negative.**
+
+| | number |
+|---|---|
+| in-sample, all four view kinds | 30/30 |
+| held-out cross-host, host-B question from host-A keys | **11/30** |
+| per fold | 2, 4, 0, 1, 3, 1 |
+| frozen v1-v3 baseline on the same six folds | 2/30 |
+| pre-registered floor | 15/30 |
+
+The loss went from 0.786 to 0.0014 and the mechanism reproduces every training
+vector exactly, so this is not an optimisation failure: it fits the cues it was
+given and still cannot align the two substrates for a cue it has not seen. The
+empty fold fails the gate on its own clause.
+
+Artifacts, recorded so the negative can be re-run: the views file
+`state-views-v4.pmc` (739,212 bytes, SHA-256
+`7a082ecdb371c57e34c0010ffc1e56a87763ec97a301869dba127586f435f55a`) built by
+`bench/pmc_state_views.py` from the 30 training cues only, the trainer report
+from `crates/pmc-train/examples/train_pmc_state.rs`, and the baseline and
+verdict from `bench/crosshost_cv.py`.
+
+Per the pre-registration, the failure is recorded and the line pivots to the
+50M core as a task learner. The evaluation cues and the control questions were
+never read by the gate: they stay untouched for the attempt that would follow.
 
 ## The loop
 

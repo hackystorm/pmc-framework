@@ -38,6 +38,18 @@ that the resulting systems are conscious.
    v3; host B recalls 1/8, 0/8 and 2/8. The v3 host-A control is 3/8. The
    pre-registered pass is false every time. This is a negative on the
    cross-host interface, not a positive swap, and it is not the 50–100M PMC.
+   A fourth mechanism was pre-registered and run against the same
+   cross-host question: a trainable per-host input projection, a shared
+   residual SwiGLU body and an L2 key, trained with InfoNCE over the views of
+   one fact from both hosts. It fits the 30 training cues exactly (loss 0.786
+   to 0.0014, 30/30 on every in-sample view kind) and retrieves **11 of 30**
+   held-out cross-host questions across six folds, with one fold meeting
+   nothing. The frozen v1–v3 mechanism on the identical folds retrieves 2. The
+   pre-registered gate required at least 15 with no empty fold, so it failed.
+   A trainable interface that cannot generalise to an unseen cue is a different
+   and sharper negative than a frozen one: the cross-host failure here is not
+   an optimisation failure but an information one. The evaluation cues and the
+   control questions were never read.
    A 50.4M reference core checkpoint was trained on a fixed 48-token sequence
    (200 steps, loss 5.887041 to 0.000008) and loads through the checkpoint
    verifier at 47/47 positions (loss 7.77e-6, E2: real artifact); it is a

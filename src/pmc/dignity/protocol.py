@@ -189,6 +189,7 @@ class DignityProtocol:
         *,
         policy: LoadPolicy | None = None,
         rumination_threshold: int = 3,
+        profile: str | None = None,
     ) -> None:
         self.workspace = Path(workspace)
         self.sidecar_dir = self.workspace / "sidecar"
@@ -196,6 +197,11 @@ class DignityProtocol:
         self.ledger_path = self.sidecar_dir / "ledger.jsonl"
         self.journal_path = self.sidecar_dir / "journal.jsonl"
 
+        # The profile is structural, so it is resolved once and refused here
+        # rather than discovered later, when something has already happened.
+        from ..profiles import profile_or_default
+
+        self.profile = profile_or_default(profile)
         self.registry = InstanceRegistry(self.journal_path)
         self.ledger = LoadLedger(policy)
         self.detector = RuminationDetector(rumination_threshold)

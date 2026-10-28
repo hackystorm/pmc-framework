@@ -466,6 +466,41 @@ numbers" note below refers to the evaluation battery.
   `tokenizer.ggml.add_eos_token`; the CLI warns and the last position is the
   final text token, not an EOS token. Check this per model before training.
 
+## Cross-host gate over the training cues
+
+`pmc_state_views.py` builds the views file the v4 mechanism trains on, from
+the already-extracted hidden states and the frozen word list. It writes only
+the 30 training facts and the 30 training questions for both hosts, so a gate
+run cannot read the evaluation or control cues that the attempt it decides is
+scored against.
+
+```sh
+PYTHONPATH=src:bench python3 bench/pmc_state_views.py \
+    --spec bench/swap_words_v3.json \
+    --hidden-350m /path/to/h350-v3.json --hidden-8b /path/to/h8b-v3.json \
+    --out state-views-v4.pmc --manifest state-views-v4.json
+```
+
+`train_pmc_state` trains the encoder from Rust and cross-validates it, then
+`crosshost_cv.py` trains the frozen v1–v3 mechanism on the **same** held-out
+folds and applies the pre-registered gate:
+
+```sh
+PMC_VIEWS=state-views-v4.pmc PMC_REPORT=report.json PMC_FOLDS=6 \
+    cargo run --release --offline --example train_pmc_state
+
+PYTHONPATH=src:bench python3 bench/crosshost_cv.py \
+    --spec bench/swap_words_v3.json \
+    --hidden-350m /path/to/h350-v3.json --hidden-8b /path/to/h8b-v3.json \
+    --report report.json --dims 64 --out gate.json
+```
+
+The result on 2026-10-28: 706,112 parameters, loss 0.786 to 0.0014, 30/30 on
+every in-sample view kind, and **11/30** held-out cross-host questions across
+six folds with one fold at 0. The frozen mechanism on the same folds: 2/30.
+The gate required 15/30 with no empty fold, so it failed. Full numbers and
+artifacts are in [`docs/lab.md`](../docs/lab.md#the-v4-mechanism-pre-registered-2026-10-31).
+
 ## Rules for a result
 
 1. A result without a baseline is not a result.

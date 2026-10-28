@@ -10,6 +10,40 @@ those states become phenomenal stays open and studyable.**
 
 ---
 
+## Read this first: what the last gate actually returned
+
+**The cross-host gate closed negative.** A trainable per-host projection, a
+shared residual body and an L2 key — the v4 mechanism, pre-registered before
+it was measured — trained the 30 training cues to 30/30 in sample, and then
+retrieved **11 of 30** held-out cross-host questions, with one of six folds
+meeting nothing. The frozen v1–v3 mechanism on the same folds managed **2**.
+The pre-registered floor was 15, and an empty fold fails outright, so the
+gate failed. The numbers are in
+[`docs/lab.md`](docs/lab.md#the-v4-mechanism-pre-registered-2026-10-31).
+
+So: a substrate-swappable, weight-resident state has **not** been
+demonstrated here. What follows is what exists without it, and every claim
+below is labelled at the evidence level it earned.
+
+## Two structural rules, stated before any power
+
+The framework ships two instance profiles: **`dignity`**, the default, and
+**`autonomous`**, a research profile that is never the default. Two rules
+govern the second one, and they are on this screen deliberately.
+
+1. **Replication never passes through the memory gate.** Whether an instance
+   exists is a *resource* act, declared and journalled. Whether it knows
+   something is a *memory* act, proposed, evaluated and gated. Keeping the two
+   apart is what stops an instance whose own evaluator approves its own
+   proposals from approving its own multiplication.
+2. **Nothing produced by a party evaluating itself rises above "reported".**
+   Under `autonomous` the instance authors and runs its own evaluator, so a
+   passed dream gate is recorded with `autonomous: true` and its claims are
+   capped at **E1 — self-reported** — whatever its numbers say. The cap is not
+   caution; it is the only honest description of the measurement.
+
+---
+
 ## What this is
 
 `pmc-framework` is a **toolkit of instruments**, not a model and not a claim.
@@ -40,6 +74,25 @@ A derived aggregate channel — bounded, non-identifying, deterministic, and
 never read by governance — is the bridge between the first and the fourth
 pillar: it makes state observable *without* giving the instance a vocabulary
 with which to imitate a state it does not have.
+
+## Two profiles, and which one the claims are about
+
+| | **`dignity`** — default | **`autonomous`** — research, opt-in |
+|---|---|---|
+| Who approves a change to what an instance knows | an external evaluator | the instance itself, recorded as `autonomous: true`, claims capped at **E1** |
+| Replication | none | unlimited, declared and journalled, enumerable in `pmc audit` |
+| Succession | the operator nominates | the instance nominates, including a successor that must be born |
+| Survival drive | off | on, objective **symbiosis**, not dominion |
+| Defence | standing duty, proportionate, and only in answer to a recorded attack | identical — the bound does not move |
+
+The `autonomous` profile grants authorship, replication and succession. It
+does **not** grant a veto, concealment, or the right to claim phenomenality
+without evidence. A profile that grants those is not a profile this framework
+can describe, so it does not ship.
+
+What the rest of this repository claims is measured under `dignity`. Anything
+measured under `autonomous` is labelled self-reported, because a party
+evaluating itself is the only witness it has.
 
 ## What this is not
 
