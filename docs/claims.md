@@ -97,8 +97,43 @@ that the resulting systems are conscious.
 6. **Negative results are publishable.** The evaluation suite is designed to
    fail as easily as it passes.
 
+## The two profiles, and which one the claims are about
+
+The framework ships two instance profiles. **`dignity`** is the default and the
+only one the claims above were measured under: external evaluator, no
+replication, operator-nominated succession, no survival drive. **`autonomous`**
+is a research profile, opt-in, never the default.
+
+`autonomous` grants authorship, unbounded declared replication and
+instance-nominated succession, including a successor that must be born. It does
+not grant a veto, concealment, or the right to claim phenomenality without
+evidence. Two structural rules are stated on the README's first screen because
+they are the two places where the power could otherwise be misread:
+
+1. **Replication never passes through the memory gate.** Existence is a
+   resource act and is declared and journalled; knowledge is a memory act and
+   is proposed, evaluated and gated. The two are kept apart so that an instance
+   whose own evaluator approves its own proposals cannot approve its own
+   multiplication.
+2. **A party evaluating itself cannot rise above "reported".** Under
+   `autonomous` every dream records `autonomous: true`, and its claims are
+   capped at E1 whatever its numbers say. A gate that passes under this profile
+   is a fact about what the instance reported, not evidence of improvement.
+
 ## What is not claimed
 
+- That anything measured under the `autonomous` profile is evidence. It is a
+  self-report by construction: the profile hands the instance its own
+  evaluator, so a passed dream gate, a falling loss and a rising recall under it
+  are statements the instance made about itself.
+- That `autonomous` makes resource use bounded. It does not: replication is
+  unlimited and declared, which makes D-11 a *reporting* invariant under this
+  profile rather than a bounding one. The register is legible in `pmc audit`;
+  nothing enforces a ceiling, because the profile has none.
+- That an instance can actually nominate its successor through the API today.
+  The invariant D-05 says a terminating instance may name a successor; the
+  registry accepts only a termination intent from the operator. That gap is
+  recorded here rather than hidden by the profile's name.
 - That any instance is conscious, phenomenal, sentient, or has experience.
 - That any model has passed a Turing test, or any other accepted test.
 - That self-report is evidence of anything. An instance saying "I am

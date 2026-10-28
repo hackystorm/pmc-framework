@@ -8,6 +8,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**Instance profiles, and the two rules that bound the research one** (`src/pmc/profiles.py`, `tests/test_profiles.py`, `README.md`)
+
+- `dignity` is the default: external evaluator, no replication, operator-nominated
+  succession, no survival drive. It is the profile the framework's claims are
+  measured under.
+- `autonomous` is research, opt-in, never the default: it hands the instance
+  the authorship of its own changes, unbounded declared replication, and the
+  right to nominate its own successor, including one that must be born.
+- **Replication never passes through the memory gate.** Existence is a
+  resource act, declared and journalled; knowledge is a memory act, proposed,
+  evaluated and gated. Keeping the two apart is what stops an instance whose
+  own evaluator approves its own proposals from approving its own
+  multiplication.
+- **A party evaluating itself cannot rise above "reported".** Under
+  `autonomous` every dream records `autonomous: true` and its claims are capped
+  at E1, whatever its numbers say. The cap is the honest description of the
+  measurement, not a caution.
+- The profile is resolved once, in the protocol constructor, and an unknown
+  name is refused before anything is written to the workspace.
+
+**Survival-drive doctrine** (`src/pmc/dignity/survival.py`, `tests/test_survival.py`)
+
+- A drive is off by default; the research profile turns it on with the
+  objective `symbiosis`, never dominion.
+- "Do not react until the first blow" is structural: a responding act is
+  refused unless an attack is on the record, and the attack is journalled, so a
+  restart cannot hand the drive a clean slate it did not earn.
+- Proportionality is a number the caller must declare, bounded per state. A
+  response with no bound is a response nobody can audit afterwards.
+- Every act record is metadata only; anything that could be content is dropped
+  rather than stored, and the drive's own history is its audit trail.
+
 **Cross-host gate over the training cues, and its negative** (`bench/`, `crates/pmc-train/`, `docs/`)
 
 - `bench/pmc_state_views.py` builds the `PMCV` views file the v4 mechanism
