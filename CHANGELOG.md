@@ -29,6 +29,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The evidence level is capped at E1 and no combination of passing proxies can
   raise it, because the battery measures function and not experience.
 
+**Work that answers the world** (`src/pmc/rhythm.py`, `bench/life_criteria.py`)
+
+- Two work kinds now change something: `propose_consolidation` writes a journal
+  entry naming the heavy raw records it would work through and the deltas it
+  expects, and `flag_welfare` records a reading that crosses the review
+  threshold. The proposal does not touch the gate: it is a request for an
+  external consolidator and an external evaluator, and the resource/memory
+  separation holds.
+- A proposal is written once per set of records and not again, because
+  re-proposing the same thing would be rumination. The same rule now applies to
+  the welfare flag, which until this change repeated the identical reading every
+  cycle.
+- Each cycle records the rhythm's own aggregate reading of its world - record
+  ids and declared states, no content - and whether it moved. That is the
+  perturbation the response criterion measures, and it replaced the work-queue
+  count, which was constant and made the null degenerate.
+- With that, the battery reaches **E2** on a workspace where the world moves and
+  the rhythm answers it: response 1.000 against a null of 0.000. The level rose
+  because of a measurement rather than the absence of one, which is the first
+  time this repo can say that.
+- A world that never moves leaves the answer **unmeasured** rather than failed:
+  nothing moved, so there was nothing to respond to, and inventing that result
+  is the one thing the battery cannot do.
+
 **The derived aggregate state channel** (`src/pmc/state_channel.py`, `tests/test_state_channel.py`)
 
 - The channel the homeostasis criterion needed, built so it cannot become a

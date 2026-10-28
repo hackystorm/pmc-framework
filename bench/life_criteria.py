@@ -193,13 +193,18 @@ def rhythm_pairs(protocol: DignityProtocol, instance_id: str) -> tuple[list, lis
         if payload.get("act") != "cycle":
             continue
         items = payload.get("items", [])
-        perturbed = bool(items)
+        # The perturbation is the world moving - the rhythm's own aggregate
+        # reading of it - and the response is the cycle changing something.
+        # The null pairs the same responses with the perturbations permuted,
+        # which is a rhythm that changes things independently of its world.
+        perturbed = bool(payload.get("world_changed"))
         responded = any(bool(item.get("changed")) for item in items)
         rows.append({"perturbed": perturbed, "responded": responded})
     shuffled = [dict(row) for row in rows]
-    for index in range(len(shuffled)):
-        other = (index + len(shuffled) // 2) % len(shuffled)
-        shuffled[index]["perturbed"] = rows[other]["perturbed"] if rows else False
+    order = list(range(len(shuffled)))
+    order.reverse()
+    for index, position in enumerate(order):
+        shuffled[index]["perturbed"] = rows[position]["perturbed"] if rows else False
     return rows, shuffled
 
 
@@ -220,9 +225,12 @@ def run(workspace: str | Path, instance_id: str) -> dict[str, Any]:
         boundaries(trace),
     ]
     unmeasured: list[str] = []
-    if rows:
+    if rows and any(row["perturbed"] for row in rows):
         results.append(response(rows, shuffled))
     else:
+        # Nothing in the world moved, so there was nothing to respond to. That
+        # is a different statement from "it failed to respond", and reporting
+        # it as a failure would be the battery inventing a result.
         unmeasured.append("response")
 
     report = BatteryReport(results=tuple(results), unmeasured=tuple(unmeasured))

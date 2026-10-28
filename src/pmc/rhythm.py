@@ -35,6 +35,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
+from .dignity.digestion import DigestState
 from .dignity.errors import DignityError
 
 
@@ -61,6 +62,8 @@ WORK_ASSESS_WELFARE = "assess_welfare"
 WORK_AUDIT_LIFECYCLE = "audit_lifecycle"
 WORK_REPLICATION_TREE = "replication_tree"
 WORK_REPLAY_CANDIDATES = "replay_candidates"
+WORK_PROPOSE_CONSOLIDATION = "propose_consolidation"
+WORK_FLAG_WELFARE = "flag_welfare"
 
 ALL_WORK = (
     WORK_VERIFY_JOURNAL,
@@ -68,8 +71,27 @@ ALL_WORK = (
     WORK_AUDIT_LIFECYCLE,
     WORK_REPLICATION_TREE,
     WORK_REPLAY_CANDIDATES,
+    WORK_PROPOSE_CONSOLIDATION,
+    WORK_FLAG_WELFARE,
 )
-"""Every kind of work the rhythm can be handed."""
+"""Every kind of work the rhythm can be handed.
+
+The last two are the ones that *change* something: a consolidation proposal
+lands in the journal with the records it would work through, and a welfare
+flag lands when a reading crosses the review threshold. Everything before them
+checks and reports, which is why a rhythm that only runs the first five never
+produces a response.
+"""
+
+PROPOSAL_PRESSURE = 0.5
+"""The declared load above which a memory is worth proposing for consolidation.
+
+A declared number, not an inference: nothing here reads what a memory says,
+only how heavy it was declared to be.
+"""
+
+PROPOSAL_EVENT = "CONSOLIDATION_PROPOSED"
+WELFARE_FLAG_EVENT = "WELFARE_FLAG"
 
 
 @dataclass(frozen=True)
@@ -133,6 +155,8 @@ class CycleRecord:
     useful: bool = False
     stopped: bool = False
     reason: str | None = None
+    world_changed: bool = False
+    world_reading: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -141,6 +165,7 @@ class CycleRecord:
             "useful": self.useful,
             "stopped": self.stopped,
             "reason": self.reason,
+            "world_changed": self.world_changed,
         }
 
 
@@ -165,6 +190,7 @@ class WorkRhythm:
         self.stopped = False
         self.stop_reason: str | None = None
         self._last_cycle_at: float | None = None
+        self._last_world: tuple[tuple[str, str], ...] | None = None
         self._budget_declared = False
 
     # -- the queue ---------------------------------------------------------
@@ -194,6 +220,8 @@ class WorkRhythm:
             WORK_AUDIT_LIFECYCLE: self._audit_lifecycle,
             WORK_REPLICATION_TREE: self._replication_tree,
             WORK_REPLAY_CANDIDATES: self._replay_candidates,
+            WORK_PROPOSE_CONSOLIDATION: self._propose_consolidation,
+            WORK_FLAG_WELFARE: self._flag_welfare,
         }
         runner = runners[kind]
         expect_change = kind == WORK_ASSESS_WELFARE
@@ -201,7 +229,11 @@ class WorkRhythm:
             WorkItem(
                 kind=kind,
                 run=lambda runner=runner: runner(**details),
-                expect_change=expect_change,
+                # Only the two kinds that act on the world are expected to
+                # change something; the rest check and report, and a check that
+                # passes is expected to change nothing.
+                expect_change=expect_change
+                or kind in (WORK_PROPOSE_CONSOLIDATION, WORK_FLAG_WELFARE),
             )
         )
 
@@ -256,6 +288,15 @@ class WorkRhythm:
         if not batch:
             record.reason = "no work queued"
         record.stopped = self.stopped
+        # What the world looked like when this cycle ran, and whether it moved
+        # since the last one. This is the rhythm's own reading of its
+        # environment at the aggregate level - counts and declared states, no
+        # content - and it is what makes a response measurable rather than a
+        # restatement of the work queue.
+        world = self._world_state()
+        record.world_changed = self._last_world is not None and world != self._last_world
+        record.world_reading = len(world)
+        self._last_world = world
         self.history.append(record)
         self.cycles_spent += 1
         self._last_cycle_at = record.at
@@ -382,6 +423,137 @@ class WorkRhythm:
             return False
         return bool(records())
 
+    def _candidates(self) -> list[Any]:
+        """Heavier-than-threshold raw memories, as declared metadata."""
+        records = getattr(self.protocol, "records", None)
+        if not callable(records):
+            return []
+        raw = []
+        for record in records():
+            load = float(getattr(record, "emotional_load", 0.0) or 0.0)
+            state = getattr(record, "digest_state", DigestState.RAW)
+            if load >= PROPOSAL_PRESSURE and state == DigestState.RAW:
+                raw.append(record)
+        return raw
+
+    def _last_proposal_ids(self) -> tuple[str, ...]:
+        registry = getattr(self.protocol, "registry", None)
+        if registry is None or not hasattr(registry, "journal"):
+            return ()
+        found: list[str] = []
+        for entry in registry.journal():
+            if entry.get("type") != PROPOSAL_EVENT:
+                continue
+            if entry.get("instance_id") != self.instance_id:
+                continue
+            found = [
+                str(record_id)
+                for record_id in entry.get("payload", {}).get("record_ids", [])
+            ]
+        return tuple(found)
+
+    def _propose_consolidation(self, **_: Any) -> bool:
+        """Write one consolidation proposal, when there is something new.
+
+        The proposal lands in the journal with the record ids it would work
+        through and the deltas it expects, which makes it an act the next cycle
+        can see. It does not touch the gate: a proposal is a request for an
+        external consolidator and an external evaluator, and the separation
+        between a resource act and a memory act holds.
+        """
+        registry = getattr(self.protocol, "registry", None)
+        if registry is None or not hasattr(registry, "record_event"):
+            return False
+        candidates = self._candidates()
+        record_ids = tuple(
+            str(getattr(record, "record_id", "")) for record in candidates
+        )
+        if not record_ids or record_ids == self._last_proposal_ids():
+            return False
+        registry.record_event(
+            PROPOSAL_EVENT,
+            self.instance_id,
+            {
+                "record_ids": list(record_ids),
+                "count": len(record_ids),
+                "pressure": PROPOSAL_PRESSURE,
+                "expected": {
+                    "recall_older": 0.0,
+                    "recall_newer": 0.0,
+                    "interference": 0.0,
+                    "calibration": 0.0,
+                },
+                "content_read": False,
+            },
+        )
+        return True
+
+    def _flag_welfare(self, **_: Any) -> bool:
+        """Raise a flag when the reading crosses the review threshold *and
+        differs from the last one*.
+
+        The second half is not a nicety. An act that repeats the same reading
+        every cycle is rumination (D-09), and the response criterion in the
+        life-criteria battery catches exactly it: an instance that responds to
+        everything scores the same as the null that responds to nothing
+        independently, so the flag has to be an answer to a change.
+        """
+        registry = getattr(self.protocol, "registry", None)
+        if registry is None or not hasattr(registry, "record_event"):
+            return False
+        assessor = getattr(self.protocol, "agent_assessor", None)
+        ledger = getattr(self.protocol, "ledger", None)
+        if assessor is None or ledger is None:
+            return False
+        report = assessor.assess(instance_id=self.instance_id, ledger=ledger)
+        if not (report.requires_review or report.requires_pause):
+            return False
+        payload = {
+            "score": round(float(report.distress_score), 6),
+            "requires_pause": bool(report.requires_pause),
+            "requires_review": bool(report.requires_review),
+            "factors": {
+                name: round(float(value), 6) for name, value in report.factors.items()
+            },
+        }
+        if payload == self._last_welfare_flag():
+            return False
+        registry.record_event(WELFARE_FLAG_EVENT, self.instance_id, payload)
+        return True
+
+    def _last_welfare_flag(self) -> dict[str, Any] | None:
+        registry = getattr(self.protocol, "registry", None)
+        if registry is None or not hasattr(registry, "journal"):
+            return None
+        found: dict[str, Any] | None = None
+        for entry in registry.journal():
+            if entry.get("type") != WELFARE_FLAG_EVENT:
+                continue
+            if entry.get("instance_id") != self.instance_id:
+                continue
+            found = entry.get("payload")
+        return found
+
+    # -- the world ---------------------------------------------------------
+
+    def _world_state(self) -> tuple[tuple[str, str], ...]:
+        """The declared memory world, as ids and declared states.
+
+        Bounded metadata only: an id and a declared digest state per record. A
+        content digest is not asked for, and the world is not read, so this is
+        a reading of *whether* the world moved rather than of what moved.
+        """
+        records = getattr(self.protocol, "records", None)
+        if not callable(records):
+            return ()
+        world: list[tuple[str, str]] = []
+        for record in records():
+            identifier = str(getattr(record, "record_id", ""))
+            state = getattr(record, "digest_state", "raw")
+            world.append((identifier, str(getattr(state, "value", state))))
+        world.sort()
+        return tuple(world)
+
     # -- the record --------------------------------------------------------
 
     def _load_budget_declared(self) -> None:
@@ -439,6 +611,8 @@ class WorkRhythm:
                     {"kind": item["kind"], "changed": item["changed"]}
                     for item in record.items
                 ],
+                "world_changed": record.world_changed,
+                "world_reading": record.world_reading,
                 "cycles_spent": self.cycles_spent,
                 "stopped": record.stopped,
                 "reason": record.reason,

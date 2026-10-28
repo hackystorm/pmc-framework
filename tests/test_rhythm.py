@@ -17,6 +17,8 @@ from pmc.dignity.protocol import DignityProtocol
 from pmc.dignity.records import Instance
 from pmc.rhythm import (
     ALL_WORK,
+    WORK_FLAG_WELFARE,
+    WORK_PROPOSE_CONSOLIDATION,
     DEFAULT_POLICY,
     WORK_ASSESS_WELFARE,
     WORK_AUDIT_LIFECYCLE,
@@ -247,3 +249,153 @@ def RhythmTight(**kwargs):
 
 
 from pmc.rhythm import RhythmBudgetExceeded  # noqa: E402  (used by one test)
+
+
+# -- work that changes something ---------------------------------------------
+
+
+def _heavy(protocol: DignityProtocol, count: int = 3) -> None:
+    from pmc.dignity.records import MemoryRecord, Provenance, ProvenanceKind
+
+    for index in range(count):
+        protocol.admit(
+            MemoryRecord(
+                record_id=f"mem_{index}",
+                content_digest="a" * 64,
+                provenance=Provenance(kind=ProvenanceKind.OWN),
+                emotional_load=0.8,
+                topics=("work",),
+            )
+        )
+
+
+def test_a_heavy_memory_gets_a_consolidation_proposal(protocol, workspace):
+    lab = auto(workspace)
+    lab.birth(Instance(instance_id="inst_001", name="One"))
+    _heavy(lab)
+    cycle = lab.rhythm("inst_001")
+    cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+    record = cycle.tick(force=True)
+    assert record.useful is True
+    proposals = [
+        entry
+        for entry in lab.registry.journal()
+        if entry["type"] == "CONSOLIDATION_PROPOSED"
+    ]
+    assert len(proposals) == 1
+    payload = proposals[0]["payload"]
+    assert payload["count"] == 3
+    assert payload["record_ids"] == ["mem_0", "mem_1", "mem_2"]
+    assert payload["content_read"] is False
+
+
+def test_the_same_records_are_not_proposed_twice(protocol, workspace):
+    """Re-proposing the same set would be rumination, so it is a no-op."""
+    lab = auto(workspace)
+    lab.birth(Instance(instance_id="inst_001", name="One"))
+    _heavy(lab)
+    cycle = lab.rhythm("inst_001")
+    for _index in range(4):
+        cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+        cycle.tick(force=True)
+    proposals = [
+        entry
+        for entry in lab.registry.journal()
+        if entry["type"] == "CONSOLIDATION_PROPOSED"
+    ]
+    assert len(proposals) == 1
+
+
+def test_a_new_heavy_memory_gets_its_own_proposal(protocol, workspace):
+    lab = auto(workspace)
+    lab.birth(Instance(instance_id="inst_001", name="One"))
+    _heavy(lab)
+    cycle = lab.rhythm("inst_001")
+    cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+    cycle.tick(force=True)
+    from pmc.dignity.records import MemoryRecord, Provenance, ProvenanceKind
+
+    lab.admit(
+        MemoryRecord(
+            record_id="mem_new",
+            content_digest="a" * 64,
+            provenance=Provenance(kind=ProvenanceKind.OWN),
+            emotional_load=0.8,
+            topics=("work",),
+        )
+    )
+    cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+    record = cycle.tick(force=True)
+    assert record.useful is True
+    proposals = [
+        entry
+        for entry in lab.registry.journal()
+        if entry["type"] == "CONSOLIDATION_PROPOSED"
+    ]
+    assert len(proposals) == 2
+
+
+def test_a_light_memory_is_not_proposed(protocol, workspace):
+    lab = auto(workspace)
+    lab.birth(Instance(instance_id="inst_001", name="One"))
+    from pmc.dignity.records import MemoryRecord, Provenance, ProvenanceKind
+
+    lab.admit(
+        MemoryRecord(
+            record_id="light",
+            content_digest="a" * 64,
+            provenance=Provenance(kind=ProvenanceKind.OWN),
+            emotional_load=0.1,
+            topics=("work",),
+        )
+    )
+    cycle = lab.rhythm("inst_001")
+    cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+    record = cycle.tick(force=True)
+    assert record.useful is False
+
+
+def test_a_quiet_instance_raises_no_welfare_flag(protocol, workspace):
+    lab = auto(workspace)
+    lab.birth(Instance(instance_id="inst_001", name="One"))
+    cycle = lab.rhythm("inst_001")
+    cycle.enqueue_kind(WORK_FLAG_WELFARE)
+    record = cycle.tick(force=True)
+    assert record.useful is False
+    assert not [
+        entry for entry in lab.registry.journal() if entry["type"] == "WELFARE_FLAG"
+    ]
+
+
+def test_an_instance_under_pressure_raises_a_flag(protocol, workspace):
+    lab = auto(workspace)
+    lab.birth(Instance(instance_id="inst_001", name="One"))
+    for index in range(6):
+        lab.admit(
+            __import__(
+                "pmc.dignity.records", fromlist=["MemoryRecord"]
+            ).MemoryRecord(
+                record_id=f"load_{index}",
+                content_digest="a" * 64,
+                provenance=__import__(
+                    "pmc.dignity.records", fromlist=["Provenance"]
+                ).Provenance(
+                    kind=__import__(
+                        "pmc.dignity.records", fromlist=["ProvenanceKind"]
+                    ).ProvenanceKind.OWN
+                ),
+                emotional_load=0.9,
+                topics=("diverse",) if index % 2 else ("work",),
+            )
+        )
+    cycle = lab.rhythm("inst_001")
+    cycle.enqueue_kind(WORK_FLAG_WELFARE)
+    record = cycle.tick(force=True)
+    assert record.useful is True
+    flags = [
+        entry
+        for entry in lab.registry.journal()
+        if entry["type"] == "WELFARE_FLAG"
+    ]
+    assert len(flags) == 1
+    assert flags[0]["payload"]["score"] > 0

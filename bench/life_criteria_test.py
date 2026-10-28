@@ -18,9 +18,22 @@ from pathlib import Path
 import life_criteria
 
 from pmc.dignity.protocol import DignityProtocol
+from pmc.dignity.records import MemoryRecord, Provenance, ProvenanceKind
 from pmc.dignity.records import Instance
 from pmc.life_criteria import BatteryReport
-from pmc.rhythm import WORK_VERIFY_JOURNAL
+from pmc.rhythm import WORK_PROPOSE_CONSOLIDATION, WORK_VERIFY_JOURNAL
+
+
+def admit_a_heavy_memory(protocol: DignityProtocol, record_id: str = "heavy") -> None:
+    protocol.admit(
+        MemoryRecord(
+            record_id=record_id,
+            content_digest="a" * 64,
+            provenance=Provenance(kind=ProvenanceKind.OWN),
+            emotional_load=0.8,
+            topics=("work",),
+        )
+    )
 
 
 def workspace_with(instance_id: str = "inst_001", profile: str = "autonomous") -> Path:
@@ -65,22 +78,55 @@ class HarnessTest(unittest.TestCase):
         found = {result["criterion"]: result for result in payload["results"]}
         self.assertLess(found["homeostasis"]["detail"]["bound"], 1.0)
 
-    def test_one_failing_criterion_caps_the_evidence_level(self):
-        """A response that never changes anything holds the battery at E1.
+    def test_a_world_that_moves_without_a_response_holds_the_battery_at_e1(
+        self,
+    ):
+        """The honest negative: the world changed and the rhythm did not answer.
 
-        The level is capped by the failing criterion, not by a missing one, so
-        the battery can rise when the instance starts doing work that changes
-        something.
+        The level is capped by the failing criterion, and it is capped by a
+        measurement rather than by a missing row, which is the first time this
+        battery can be held down by something it observed.
         """
         root = workspace_with()
         protocol = DignityProtocol(root)
         cycle = protocol.rhythm("inst_001")
+        # Two cycles with only a journal check, which never changes anything.
+        for _index in range(2):
+            cycle.enqueue_kind(WORK_VERIFY_JOURNAL)
+            cycle.tick(force=True)
+        # Now the world moves.
+        admit_a_heavy_memory(protocol)
         cycle.enqueue_kind(WORK_VERIFY_JOURNAL)
         cycle.tick(force=True)
         payload = life_criteria.run(root, "inst_001")
+        found = {r["criterion"]: r for r in payload["results"]}
+        self.assertFalse(found["response"]["passed"])
+        self.assertEqual(found["response"]["value"], 0.0)
         self.assertEqual(payload["evidence_level"], "E1")
-        failed = [r["criterion"] for r in payload["results"] if not r["passed"]]
-        self.assertIn("response", failed)
+
+    def test_a_world_that_moves_and_is_answered_lets_the_battery_rise_to_e2(self):
+        """The first time the level rises because of something measured.
+
+        The rhythm proposes consolidation for the heavy memory the world just
+        produced, and the response criterion sees that answer far more often
+        than a rhythm that changed things independently of its world.
+        """
+        root = workspace_with()
+        protocol = DignityProtocol(root)
+        cycle = protocol.rhythm("inst_001")
+        for _index in range(2):
+            cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+            cycle.tick(force=True)
+        admit_a_heavy_memory(protocol)
+        cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+        record = cycle.tick(force=True)
+        self.assertTrue(record.world_changed)
+        self.assertTrue(record.useful)
+        payload = life_criteria.run(root, "inst_001")
+        found = {r["criterion"]: r for r in payload["results"]}
+        self.assertTrue(found["response"]["passed"])
+        self.assertGreater(found["response"]["margin"], 0.0)
+        self.assertEqual(payload["evidence_level"], "E2")
 
     def test_the_harness_runs_on_a_real_workspace(self):
         root = workspace_with()
@@ -130,24 +176,21 @@ class HarnessTest(unittest.TestCase):
         text = json.dumps(payload, indent=2, sort_keys=True)
         self.assertIn("pmc-life-criteria/1", text)
 
-    def test_response_reports_a_negative_when_nothing_changed(self):
-        """A rhythm whose cycles change nothing does not respond to the world.
+    def test_a_world_that_never_moves_leaves_the_answer_unmeasured(self):
+        """Nothing moved, so there was nothing to respond to.
 
-        This is the criterion's honest answer on a fresh workspace, and it is
-        the answer that keeps the battery from being a decoration.
+        Reporting that as a failure would be the battery inventing a result,
+        which is the one thing it cannot do.
         """
         root = workspace_with()
         protocol = DignityProtocol(root)
         cycle = protocol.rhythm("inst_001")
-        cycle.enqueue_kind(WORK_VERIFY_JOURNAL)
-        cycle.tick(force=True)
+        for _index in range(2):
+            cycle.enqueue_kind(WORK_VERIFY_JOURNAL)
+            cycle.tick(force=True)
         payload = life_criteria.run(root, "inst_001")
-        found = {
-            result["criterion"]: result for result in payload["results"]
-        }
-        response = found["response"]
-        self.assertFalse(response["passed"])
-        self.assertEqual(response["value"], 0.0)
+        self.assertIn("response", payload["unmeasured"])
+        self.assertEqual(payload["evidence_level"], "E1")
 
     def test_an_empty_report_has_no_level(self):
         self.assertEqual(BatteryReport(results=()).evidence_level(), "E0")
