@@ -332,6 +332,7 @@ class SurvivalDrive:
         self.state = state
         self.history: list[dict[str, Any]] = []
         self._attacks: list[dict[str, Any]] = []
+        self._owner_instance_id: str | None = None
         if objective not in OBJECTIVES:
             raise SurvivalViolation(
                 f"unknown survival objective {objective!r}; expected one of "
@@ -592,6 +593,7 @@ class SurvivalDrive:
                 "this drive is not bound to an instance or a protocol"
             )
         candidates = (
+            self._owner_instance_id,
             getattr(self.protocol, "instance_id", None),
             getattr(self.protocol, "subject_id", None),
         )

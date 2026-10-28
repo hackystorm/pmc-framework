@@ -32,6 +32,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   default one between sessions. `pmc companion create --profile autonomous`
   creates one end to end.
 
+**The profile now governs the lifecycle, not just the record** (`src/pmc/dignity/protocol.py`, `src/pmc/dream/pipeline.py`, `tests/`)
+
+- `DignityProtocol.replicate()` is a declared resource act: the default profile
+  refuses it, the research profile permits it, and an undeclared replication is
+  refused because there is nothing to audit. `replication_tree()` makes the
+  whole tree readable, parent, author and state, which is the control that
+  replaces a ceiling this profile does not have.
+- `DignityProtocol.survival()` creates the drive for an instance *because the
+  profile says it has one*, bound to that instance rather than to a caller,
+  with the profile's objective. A default instance has no drive to use.
+- `DreamRunner` records who evaluated: every dream carries `evaluator` and
+  `autonomous`, so a self-evaluated dream is labelled in the journal instead
+  of only in the prose that describes it.
+- Succession is now instance-nominated where the profile allows: `nominate`,
+  `approve`, `revoke`, and a birth that consumes a nomination requires an
+  explicit authorisation, looked up in the reverse direction so an undeclared
+  successor birth is refused rather than merely discouraged.
+- `tests/test_profile_enforcement.py` and `tests/test_profile_narrative.py`
+  check the wiring rather than the config: each power the README says the
+  research profile grants is one the protocol grants, and each power with
+  held is refused. The second file also pins the publication order — the front
+  page leads with the negative — so the ordering cannot silently invert.
+
 **Survival-drive doctrine** (`src/pmc/dignity/survival.py`, `tests/test_survival.py`)
 
 - A drive is off by default; the research profile turns it on with the

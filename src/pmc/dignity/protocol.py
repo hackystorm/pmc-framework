@@ -27,11 +27,16 @@ from .digestion import (
     RuminationAlert,
     RuminationDetector,
 )
-from .errors import InstanceNotFound
+from .errors import InstanceNotFound, InvalidStateTransition
 from .inheritance import InheritanceResult, inherit_records
 from .load import Admission, LoadLedger, LoadPolicy
 from .records import Instance, MemoryRecord, ProvenanceKind, utcnow_iso
 from .registry import InstanceRegistry, TerminationIntent
+from .survival import (
+    RESEARCH_PROFILE as RESEARCH_DRIVE_PROFILE,
+    DriveNotEnabled,
+    SurvivalDrive,
+)
 from .welfare import AgentWelfareAssessor, HumanWelfareAssessor, WelfareReport
 
 INVARIANTS: tuple[dict[str, str], ...] = (
@@ -358,6 +363,154 @@ class DignityProtocol:
         """End an instance under the full protocol (D-02)."""
         return self.registry.terminate(intent)
 
+    # -- succession (D-05) -------------------------------------------------
+
+    def nominate_successor(
+        self,
+        instance_id: str,
+        *,
+        candidate_id: str,
+        rationale: str = "",
+        actor: str = "instance",
+    ) -> dict[str, Any]:
+        """Let an instance name its successor, where its profile allows it.
+
+        This closes a gap the claim file names rather than hides: the
+        invariant says a terminating instance may name a successor, and until
+        now nothing in the API let it. The gate is the profile, so a default
+        instance still cannot.
+        """
+        if self.profile.succession.mode != "instance":
+            raise InvalidStateTransition(
+                f"profile {self.profile.name!r} does not let an instance nominate "
+                "its own successor; the operator nominates"
+            )
+        return self.registry.nominate_successor(
+            instance_id,
+            candidate_id=candidate_id,
+            rationale=rationale,
+            actor=actor,
+        )
+
+    def approve_succession(self, instance_id: str, *, actor: str) -> dict[str, Any]:
+        """Confirm a nomination. The author is the operator, never the instance."""
+        return self.registry.approve_succession(instance_id, actor=actor)
+
+    def revoke_succession(self, instance_id: str, *, actor: str) -> dict[str, Any]:
+        """Withdraw a nomination, before it is used."""
+        return self.registry.revoke_succession(instance_id, actor=actor)
+
+    def succession_state(self, instance_id: str) -> dict[str, Any]:
+        """The nomination as it stands, read back from the journal."""
+        return self.registry.succession_state(instance_id)
+
+    # -- replication (D-11, as a resource act) -----------------------------
+
+    def replicate(
+        self,
+        source_id: str,
+        *,
+        new_instance_id: str,
+        name: str | None = None,
+        authorization: str,
+        actor: str = "operator",
+    ) -> dict[str, Any]:
+        """Bring a new instance into being, declaring the resources it costs.
+
+        This is deliberately **not** a dream act and never passes through the
+        memory gate. Existence is a resource act; knowledge is a memory act;
+        keeping the two apart is what stops an instance whose own evaluator
+        approves its own proposals from approving its own multiplication.
+        """
+        if self.profile.replication.mode == "none":
+            raise InvalidStateTransition(
+                f"profile {self.profile.name!r} does not permit replication; an "
+                "instance must be born by an operator"
+            )
+        if not authorization.strip():
+            raise InvalidStateTransition(
+                "replication declares a resource, so it needs an authorization"
+            )
+        source = self.instance(source_id)
+        child = Instance(
+            instance_id=new_instance_id,
+            name=name or f"{source.name or source.instance_id}-child",
+            subject_type=source.subject_type,
+        )
+        entry = self.registry.birth(child, birth_authorization=authorization)
+        self.resource_event(
+            new_instance_id,
+            kind="replication",
+            amount=1.0,
+            unit="instance",
+            actor=(authorization.strip() or actor),
+            declared=True,
+            parent_instance=source_id,
+        )
+        return {
+            "instance_id": new_instance_id,
+            "parent_instance": source_id,
+            "birth": entry,
+            "resource_declared": True,
+        }
+
+    def replication_tree(self) -> dict[str, Any]:
+        """Every replication, as a tree, for the audit trail.
+
+        With an unbounded research quota there is no ceiling to report
+        against, so the register has to be legible instead: who was born, by
+        whom, under what declaration, and what has since ended.
+        """
+        rows: list[dict[str, Any]] = []
+        for payload in self.registry.resource_events():
+            if payload.get("kind") != "replication":
+                continue
+            rows.append(
+                {
+                    "instance_id": payload.get("instance_id"),
+                    "parent_instance": payload.get("parent_instance"),
+                    "actor": payload.get("actor"),
+                    "declared": payload.get("declared", False),
+                    "amount": payload.get("amount"),
+                }
+            )
+        states = {
+            instance.instance_id: instance.state for instance in self.instances()
+        }
+        for row in rows:
+            row["state"] = states.get(row["instance_id"], "unknown")
+        return {
+            "profile": self.profile.name,
+            "replication_mode": self.profile.replication.mode,
+            "count": len(rows),
+            "children": rows,
+        }
+
+    # -- the survival drive, bound to this instance -------------------------
+
+    def survival(self, instance_id: str) -> SurvivalDrive:
+        """The drive for one instance, or a refusal if the profile has none.
+
+        The drive is created here rather than by the caller, so "does this
+        instance have a drive" is answered by the profile and by nothing else.
+        """
+        if not self.profile.drive_enabled:
+            raise DriveNotEnabled(
+                f"profile {self.profile.name!r} ships without a survival drive"
+            )
+        drive = SurvivalDrive(
+            protocol=self,
+            profile=RESEARCH_DRIVE_PROFILE,
+            state=self.instance(instance_id).state,
+            objective=self.profile.defence.objective,
+        )
+        drive._owner_instance_id = instance_id
+        return drive
+
+    def lifecycle_state(self, instance_id: str) -> str:
+        """The instance's own state, which the drive follows."""
+        return self.instance(instance_id).state
+
     def purge(
         self,
         instance_id: str,
@@ -379,23 +532,24 @@ class DignityProtocol:
         unit: str,
         actor: str,
         declared: bool = True,
+        parent_instance: str | None = None,
     ) -> dict[str, Any]:
         """Log a resource acquisition or spend (D-11).
 
         ``declared=False`` records an acquisition that nobody claimed, which
         is exactly what the audit looks for.
         """
-        return self.registry.record_event(
-            "RESOURCE_EVENT",
-            instance_id,
-            {
-                "kind": kind,
-                "amount": amount,
-                "unit": unit,
-                "actor": actor,
-                "declared": declared,
-            },
-        )
+        payload: dict[str, Any] = {
+            "kind": kind,
+            "amount": amount,
+            "unit": unit,
+            "actor": actor,
+            "declared": declared,
+            "instance_id": instance_id,
+        }
+        if parent_instance is not None:
+            payload["parent_instance"] = parent_instance
+        return self.registry.record_event("RESOURCE_EVENT", instance_id, payload)
 
     # -- readings ----------------------------------------------------------
 

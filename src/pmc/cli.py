@@ -419,6 +419,11 @@ def _cmd_dream(args: argparse.Namespace) -> int:
         consolidator=consolidator,
         config=config,
         is_active=protocol.ledger.is_active,
+        # The profile decides who evaluates, and the journal records it: a
+        # dream whose evaluator is the party it is about is not a
+        # measurement, whoever ran it.
+        evaluator_label=protocol.profile.evaluation.label,
+        autonomous=(protocol.profile.evaluation.mode == "autonomous"),
     )
     try:
         report = runner.run(Path(args.checkpoint), records)

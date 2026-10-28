@@ -189,11 +189,18 @@ class DreamRunner:
         consolidator: Consolidator = copy_consolidator,
         config: DreamConfig | None = None,
         is_active: Callable[[str], bool] | None = None,
+        evaluator_label: str = "external",
+        autonomous: bool = False,
     ) -> None:
         if not callable(evaluator):
             raise DreamError("evaluator must be callable")
         if not callable(consolidator):
             raise DreamError("consolidator must be callable")
+        # Who evaluated is part of the result, not part of the plumbing. A
+        # dream whose evaluator is the party it is about is recorded as such,
+        # so a reader cannot mistake a self-report for a measurement.
+        self.evaluator_label = str(evaluator_label)
+        self.autonomous = bool(autonomous)
         self.journal = journal
         self.taint = taint
         self.evaluator = evaluator
@@ -263,6 +270,8 @@ class DreamRunner:
         entry: dict[str, Any] = {
             "type": "DREAM",
             "outcome": outcome,
+            "evaluator": self.evaluator_label,
+            "autonomous": self.autonomous,
             "dream_id": dream_id,
             "checkpoint": str(checkpoint),
             "checkpoint_before": before,

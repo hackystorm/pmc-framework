@@ -54,8 +54,22 @@ class EvaluationPolicy:
     mode: str = "external"
     spot_check_every: int = 0
 
+    @property
+    def label(self) -> str:
+        """Who the numbers belong to, in the word the journal records.
+
+        ``instance`` is the honest label for a dream the instance evaluated
+        itself; it is not a slur, it is a description, and it is what makes a
+        reader treat the number as a report rather than a measurement.
+        """
+        return "instance" if self.mode == "autonomous" else "external"
+
     def describe(self) -> dict[str, Any]:
-        return {"mode": self.mode, "spot_check_every": self.spot_check_every}
+        return {
+            "mode": self.mode,
+            "label": self.label,
+            "spot_check_every": self.spot_check_every,
+        }
 
 
 @dataclass(frozen=True)

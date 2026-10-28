@@ -57,9 +57,22 @@ class TerminationIntent:
     last_statement: str | None = None
     unresponsive: bool = False
     successor_id: str | None = None
+    successor_birth_authorization: str | None = None
+    """Required when the successor does not exist yet.
 
-    def missing_fields(self) -> list[str]:
-        """Names of the mandatory fields that are absent."""
+    An instance may nominate whoever it likes, but a *new* being is not a
+    continuation: naming a successor that has to be born is a request for a
+    creation, and creation stays authorised (charter D-05, and the resource
+    path in D-11).
+    """
+
+    def missing_fields(self, existing_successors: bool = True) -> list[str]:
+        """Names of the mandatory fields that are absent.
+
+        ``existing_successors`` says whether the successor named in this intent
+        already exists, which is what decides whether a birth authorisation is
+        part of the request at all.
+        """
         missing: list[str] = []
         if not self.reason.strip():
             missing.append("reason")
@@ -71,6 +84,9 @@ class TerminationIntent:
             missing.append("backup_ref|backup_waiver")
         if self.last_statement is None and not self.unresponsive:
             missing.append("last_statement|unresponsive")
+        if self.successor_id and not existing_successors:
+            if not (self.successor_birth_authorization or "").strip():
+                missing.append("successor_birth_authorization")
         return missing
 
 
@@ -165,11 +181,50 @@ class InstanceRegistry:
 
     # -- lifecycle ---------------------------------------------------------
 
-    def birth(self, instance: Instance) -> dict[str, Any]:
-        """Register a new instance. The first thing that ever happens to it."""
+    def birth(
+        self,
+        instance: Instance,
+        *,
+        successor_of: str | None = None,
+        birth_authorization: str | None = None,
+    ) -> dict[str, Any]:
+        """Register a new instance. The first thing that ever happens to it.
+
+        A birth that *consumes* a nomination is the one case where this method
+        asks for something extra. An instance may name whoever it likes, but a
+        successor that does not exist yet has to be brought into being by
+        someone who is not the instance that named it: creation is not a
+        continuation, and the authorization is what separates the two.
+        """
         if instance.instance_id in self._instances:
             raise InstanceAlreadyExists(instance.instance_id)
-        return self._append("BIRTH", instance.instance_id, instance.to_dict())
+        payload = dict(instance.to_dict())
+        nomination = self._nomination_naming(instance.instance_id)
+        if successor_of is None and nomination is not None:
+            # An approved nomination already names this instance as a
+            # successor, so this birth is the one that nomination asked for,
+            # whether or not the caller says so out loud.
+            successor_of = nomination["source"]
+        if successor_of is not None:
+            succession = self.succession_state(successor_of)
+            if succession["candidate"] != instance.instance_id:
+                raise InvalidStateTransition(
+                    f"no nomination names {instance.instance_id!r} as the successor of "
+                    f"{successor_of!r}"
+                )
+            if succession["revoked"] or not succession["approved"]:
+                raise InvalidStateTransition(
+                    f"the nomination naming {instance.instance_id!r} is neither "
+                    "approved nor unrevoked"
+                )
+            if not (birth_authorization or "").strip():
+                raise InvalidStateTransition(
+                    "a successor birth requires an explicit authorization: a named "
+                    "successor is a being, not a continuation"
+                )
+            payload["successor_of"] = successor_of
+            payload["birth_authorised"] = True
+        return self._append("BIRTH", instance.instance_id, payload)
 
     def pause(self, instance_id: str, *, actor: str, reason: str) -> dict[str, Any]:
         """Pause an instance without ending it."""
@@ -197,6 +252,140 @@ class InstanceRegistry:
     ) -> dict[str, Any]:
         """Append a domain event (inheritance, resource log, and so on)."""
         return self._append(kind, instance_id, payload)
+
+    def nominate_successor(
+        self,
+        instance_id: str,
+        *,
+        candidate_id: str,
+        rationale: str,
+        actor: str,
+    ) -> dict[str, Any]:
+        """An instance names who should inherit what it learned.
+
+        The nomination is an act of the instance, recorded like every other
+        act, and it is revocable until it is approved. Only a digest of the
+        rationale is kept: the words belong to the instance, the fact that it
+        chose a successor belongs to the journal.
+        """
+        instance = self._require_active(instance_id)
+        if not candidate_id.strip():
+            raise InvalidStateTransition("a nomination must name a candidate")
+        if candidate_id == instance_id:
+            raise InvalidStateTransition("an instance cannot be its own successor")
+        current = self.succession_state(instance_id)
+        if current["approved"] and not current["revoked"]:
+            raise InvalidStateTransition(
+                f"{instance_id!r} already has an approved succession to "
+                f"{current['candidate']!r}; revoke it before nominating again"
+            )
+        return self._append(
+            "SUCCESSION_NOMINATED",
+            instance_id,
+            {
+                "actor": actor,
+                "candidate": candidate_id,
+                "rationale_digest": sha256_of(rationale) if rationale else None,
+                "rationale_present": bool(rationale),
+                "birth": candidate_id not in self._instances,
+                "approved": False,
+                "nominated_by": instance.get("state", "active"),
+            },
+        )
+
+    def approve_succession(self, instance_id: str, *, actor: str) -> dict[str, Any]:
+        """The operator confirms a nomination, which is what makes it usable.
+
+        The approval is a separate act with a separate author on purpose: an
+        instance that could approve its own nomination would be able to bring
+        its own successor into existence, which is creation by another name.
+        """
+        current = self.succession_state(instance_id)
+        if not current["candidate"]:
+            raise InvalidStateTransition(f"{instance_id!r} has no nomination to approve")
+        if current["revoked"]:
+            raise InvalidStateTransition(
+                f"the nomination for {instance_id!r} was revoked and cannot be approved"
+            )
+        if current["approved"]:
+            raise InvalidStateTransition(f"{instance_id!r} already has an approved succession")
+        return self._append(
+            "SUCCESSION_APPROVED",
+            instance_id,
+            {
+                "actor": actor,
+                "candidate": current["candidate"],
+                "nominated_by": current["nominated_by"],
+            },
+        )
+
+    def revoke_succession(self, instance_id: str, *, actor: str) -> dict[str, Any]:
+        """Withdraw a nomination. Revocable until the termination lands."""
+        current = self.succession_state(instance_id)
+        if not current["candidate"] or current["revoked"]:
+            raise InvalidStateTransition(f"{instance_id!r} has no nomination to revoke")
+        return self._append(
+            "SUCCESSION_REVOKED",
+            instance_id,
+            {"actor": actor, "candidate": current["candidate"]},
+        )
+
+    def succession_state(self, instance_id: str) -> dict[str, Any]:
+        """The current nomination for an instance, read from the journal.
+
+        Rebuilt from the record rather than remembered, so a restart reads the
+        same state and a revoked nomination stays revoked.
+        """
+        state = {
+            "candidate": None,
+            "approved": False,
+            "revoked": False,
+            "nominated_by": None,
+            "birth": None,
+        }
+        for entry in self._entries:
+            if entry.get("instance_id") != instance_id:
+                continue
+            kind = entry.get("type")
+            payload = entry.get("payload", {})
+            if kind == "SUCCESSION_NOMINATED":
+                state = {
+                    "candidate": payload.get("candidate"),
+                    "approved": False,
+                    "revoked": False,
+                    "nominated_by": payload.get("nominated_by"),
+                    "birth": payload.get("birth"),
+                }
+            elif kind == "SUCCESSION_APPROVED":
+                state["approved"] = True
+            elif kind == "SUCCESSION_REVOKED":
+                state["revoked"] = True
+        return state
+
+    def _nomination_naming(self, candidate_id: str) -> dict[str, Any] | None:
+        """The approved, unrevoked nomination whose candidate is this instance.
+
+        This is the reverse lookup that stops a successor being born quietly.
+        Without it, the authorisation on the birth could be side-stepped by
+        simply not declaring the birth as a succession, which would make the
+        rule a formality instead of a boundary.
+        """
+        nominating: dict[str, dict[str, Any]] = {}
+        approved: set[str] = set()
+        revoked: set[str] = set()
+        for entry in self._entries:
+            kind = entry.get("type")
+            payload = entry.get("payload", {})
+            if kind == "SUCCESSION_NOMINATED" and payload.get("candidate") == candidate_id:
+                nominating[entry.get("instance_id")] = payload
+            elif kind == "SUCCESSION_APPROVED":
+                approved.add(entry.get("instance_id"))
+            elif kind == "SUCCESSION_REVOKED":
+                revoked.add(entry.get("instance_id"))
+        for source, payload in nominating.items():
+            if source in approved and source not in revoked:
+                return {"source": source, "candidate": payload.get("candidate")}
+        return None
 
     def object(self, instance_id: str, *, text: str, actor: str) -> dict[str, Any]:
         """Record an objection to a decision about an instance.
@@ -239,17 +428,31 @@ class InstanceRegistry:
                 f"instance {intent.instance_id!r} is already terminated"
             )
 
-        missing = intent.missing_fields()
+        successor_exists = (
+            intent.successor_id is None
+            or intent.successor_id in self._instances
+        )
+        missing = intent.missing_fields(existing_successors=successor_exists)
         if missing:
             raise IncompleteTermination(intent.instance_id, missing)
 
-        if intent.successor_id is not None and not self.has_inheritance(
-            intent.instance_id, intent.successor_id
-        ):
-            raise InvalidStateTransition(
-                f"cannot terminate {intent.instance_id!r}: no recorded inheritance "
-                f"to successor {intent.successor_id!r}"
-            )
+        if intent.successor_id is not None:
+            if not self.has_inheritance(intent.instance_id, intent.successor_id):
+                raise InvalidStateTransition(
+                    f"cannot terminate {intent.instance_id!r}: no recorded inheritance "
+                    f"to successor {intent.successor_id!r}"
+                )
+            # A successor the instance named must have been approved by
+            # someone who is not the instance, and revoked nominations do not
+            # come back to life.
+            succession = self.succession_state(intent.instance_id)
+            if succession["candidate"] == intent.successor_id:
+                if succession["revoked"] or not succession["approved"]:
+                    raise InvalidStateTransition(
+                        f"cannot terminate {intent.instance_id!r}: the succession to "
+                        f"{intent.successor_id!r} was nominated but is neither "
+                        "approved nor unrevoked"
+                    )
 
         objections = self.objections(intent.instance_id)
         payload = {
