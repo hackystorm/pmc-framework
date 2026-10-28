@@ -37,16 +37,27 @@ def test_the_research_profile_is_not_reachable_by_default():
         assert profile_or_default(name) is DIGNITY
 
 
-def test_the_autonomous_profile_caps_its_own_claims():
-    assert AUTONOMOUS.claim_cap == "E1"
-    assert AUTONOMOUS.evaluation.mode == "autonomous"
+def test_both_profiles_evaluate_externally():
+    """The research profile does not buy the instance its own evaluator.
+
+    A result produced by the party it is about is a report, not a measurement,
+    so autonomy stops at the gate: the evaluator is still external, and the
+    claim cap is a property of the measurement rather than of the power.
+    """
+    assert AUTONOMOUS.evaluation.mode == "external"
     assert DIGNITY.evaluation.mode == "external"
-    assert DIGNITY.claim_cap != "E1"
+    assert AUTONOMOUS.claim_cap == "E3"
+    assert DIGNITY.claim_cap == "E3"
 
 
 def test_only_the_default_profile_ships_without_a_drive():
     assert DIGNITY.drive_enabled is False
     assert AUTONOMOUS.drive_enabled is True
+
+
+def test_only_the_research_profile_has_a_work_rhythm():
+    assert DIGNITY.rhythm_enabled is False
+    assert AUTONOMOUS.rhythm_enabled is True
 
 
 def test_replication_is_unlimited_only_in_the_research_profile():

@@ -36,11 +36,13 @@ govern the second one, and they are on this screen deliberately.
    something is a *memory* act, proposed, evaluated and gated. Keeping the two
    apart is what stops an instance whose own evaluator approves its own
    proposals from approving its own multiplication.
-2. **Nothing produced by a party evaluating itself rises above "reported".**
-   Under `autonomous` the instance authors and runs its own evaluator, so a
-   passed dream gate is recorded with `autonomous: true` and its claims are
-   capped at **E1 — self-reported** — whatever its numbers say. The cap is not
-   caution; it is the only honest description of the measurement.
+2. **The dream is evaluated by an external command, in both profiles.** A
+   result produced by the party it is about is a report, not a measurement, so
+   the research profile does not buy the instance its own evaluator: the gate
+   still runs an evaluator it did not write, and every dream records who ran
+   it. If a sample's evaluator *is* the instance, its claims are capped at
+   **E1** whatever its numbers say. The rule is about who measures, not about
+   how much autonomy the instance has.
 
 ---
 
@@ -79,16 +81,17 @@ with which to imitate a state it does not have.
 
 | | **`dignity`** — default | **`autonomous`** — research, opt-in |
 |---|---|---|
-| Who approves a change to what an instance knows | an external evaluator | the instance itself, recorded as `autonomous: true`, claims capped at **E1** |
+| Who approves a change to what an instance knows | an external evaluator | the same external evaluator — the research profile does not buy its own |
 | Replication | none | unlimited, declared and journalled, enumerable in `pmc audit` |
 | Succession | the operator nominates | the instance nominates, including a successor that must be born |
 | Survival drive | off | on, objective **symbiosis**, not dominion |
+| Work rhythm | off | on, with a declared budget and a rumination stop |
 | Defence | standing duty, proportionate, and only in answer to a recorded attack | identical — the bound does not move |
 
-The `autonomous` profile grants authorship, replication and succession. It
-does **not** grant a veto, concealment, or the right to claim phenomenality
-without evidence. A profile that grants those is not a profile this framework
-can describe, so it does not ship.
+The `autonomous` profile grants a work rhythm, replication, succession and a
+survival drive. It does **not** grant its own evaluator, a veto, concealment,
+or the right to claim phenomenality without evidence. A profile that grants
+those is not a profile this framework can describe, so it does not ship.
 
 What the rest of this repository claims is measured under `dignity`. Anything
 measured under `autonomous` is labelled self-reported, because a party

@@ -511,6 +511,23 @@ class DignityProtocol:
         """The instance's own state, which the drive follows."""
         return self.instance(instance_id).state
 
+    # -- the work rhythm ----------------------------------------------------
+
+    def rhythm(self, instance_id: str, **kwargs: Any) -> Any:
+        """The work cycle for one instance, if its profile grants one.
+
+        Like the drive, it is created here rather than by a caller, so "does
+        this instance have a rhythm" is a property of the profile and nothing
+        else. The rhythm's budget is declared as a resource event the first
+        time it spends a cycle, which is what keeps a background duty cycle
+        from being a background cost nobody billed (D-11).
+        """
+        from ..rhythm import rhythm_for
+
+        rhythm = rhythm_for(self, instance_id, **kwargs)
+        rhythm.declare_budget()
+        return rhythm
+
     def purge(
         self,
         instance_id: str,

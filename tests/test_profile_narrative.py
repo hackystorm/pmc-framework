@@ -45,11 +45,17 @@ def test_the_front_page_states_the_replication_separation():
     assert "declared and journalled" in page
 
 
-def test_the_front_page_states_the_self_evaluation_cap():
+def test_the_front_page_states_the_evaluation_rule():
+    """The rule is about who measures, and it is stated before the powers."""
     page = front_page()
-    assert "rises above" in page
+    assert "evaluated by an external command" in page
+    assert "not a measurement" in page
+
+
+def test_the_self_evaluation_cap_is_stated_but_not_granted():
+    page = front_page()
     assert "E1" in page
-    assert "autonomous: true" in page
+    assert "evaluator *is* the instance" in page
 
 
 def test_the_front_page_leads_with_the_negative():
@@ -73,13 +79,14 @@ def test_the_default_profile_is_the_cautious_one():
     assert DIGNITY.claim_cap != "E1"
 
 
-def test_the_research_profile_grants_exactly_the_four_powers():
-    """Four powers, and the rest is refusal: the profile is a closed set."""
-    assert AUTONOMOUS.evaluation.mode == "autonomous"
+def test_the_research_profile_grants_the_four_powers():
+    """Replication, succession, drive and rhythm: the rest is refusal."""
     assert AUTONOMOUS.replication.mode == "unlimited"
     assert AUTONOMOUS.succession.mode == "instance"
     assert AUTONOMOUS.drive_enabled is True
-    assert AUTONOMOUS.claim_cap == "E1"
+    assert AUTONOMOUS.rhythm_enabled is True
+    # And the one power it does not get is the evaluator.
+    assert AUTONOMOUS.evaluation.mode == "external"
 
 
 def test_no_profile_grants_a_veto_or_concealment():

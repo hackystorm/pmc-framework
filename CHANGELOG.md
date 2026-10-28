@@ -8,6 +8,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**The work rhythm, granted to the research profile** (`src/pmc/rhythm.py`, `tests/test_rhythm.py`)
+
+- An instance whose profile grants it runs a duty cycle on its own: verify the
+  journal chain, assess welfare, audit the lifecycle, read the replication
+  tree, refresh the replay candidates.
+- The rhythm is granted, not assumed: the default profile has one only in the
+  sense that it has none, and an instance that was not given a rhythm is
+  refused one.
+- Its budget is a resource event with an author and a cycle count (D-11), so a
+  background duty cycle is never a background cost nobody billed.
+- It stops when it stops being useful. A cycle whose items all return "nothing
+  changed" is a turn of the wheel rather than work, and when the useful rate
+  falls below the floor the rhythm refuses further cycles until an operator
+  resets it. A rhythm cannot reset itself: an instance that could clear its own
+  rumination stop could turn forever, which is the behaviour the guardrail
+  exists to prevent (D-09).
+- The stop is part of the instance's record, not of the process that stopped
+  it, so a restarted rhythm reads the journal and does not wake up spinning.
+- The rhythm produces work and a metadata-only record. It makes no claim about
+  itself, and nothing in it reads content.
+
+**The dream is externally evaluated in both profiles** (`src/pmc/profiles.py`, `README.md`, `docs/claims.md`)
+
+- The research profile no longer buys the instance its own evaluator. A result
+  produced by the party it is about is a report, not a measurement, so the gate
+  still runs an evaluator the instance did not write, and every dream records
+  who ran it.
+- The E1 cap now applies to a *sample whose evaluator is the instance* rather
+  than to the research profile as a whole, and the front page states the rule
+  as a rule about who measures rather than about how much autonomy an instance
+  has.
+
 **Instance profiles, and the two rules that bound the research one** (`src/pmc/profiles.py`, `tests/test_profiles.py`, `README.md`)
 
 - `dignity` is the default: external evaluator, no replication, operator-nominated

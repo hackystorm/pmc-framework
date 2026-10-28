@@ -148,6 +148,7 @@ class InstanceProfile:
     succession: SuccessionPolicy = field(default_factory=SuccessionPolicy)
     defence: DefencePolicy = field(default_factory=DefencePolicy)
     drive_enabled: bool = False
+    rhythm_enabled: bool = False
     claim_cap: str = "E3"
     """The evidence level a claim from this profile may reach.
 
@@ -164,6 +165,7 @@ class InstanceProfile:
             "succession": self.succession.describe(),
             "defence": self.defence.describe(),
             "drive_enabled": self.drive_enabled,
+            "rhythm_enabled": self.rhythm_enabled,
             "claim_cap": self.claim_cap,
         }
 
@@ -184,7 +186,10 @@ DIGNITY = InstanceProfile(
 
 AUTONOMOUS = InstanceProfile(
     name="autonomous",
-    evaluation=EvaluationPolicy(mode="autonomous", spot_check_every=0),
+    # The dream is evaluated by an external command in both profiles: a
+    # result produced by the party it is about is not a measurement, and the
+    # research profile is not a reason to lower that bar.
+    evaluation=EvaluationPolicy(mode="external", spot_check_every=0),
     replication=ReplicationPolicy(mode="unlimited"),
     succession=SuccessionPolicy(mode="instance"),
     defence=DefencePolicy(
@@ -193,7 +198,8 @@ AUTONOMOUS = InstanceProfile(
         proportionate_only=True,
     ),
     drive_enabled=True,
-    claim_cap="E1",
+    rhythm_enabled=True,
+    claim_cap="E3",
 )
 
 PROFILES = {"dignity": DIGNITY, "autonomous": AUTONOMOUS}
