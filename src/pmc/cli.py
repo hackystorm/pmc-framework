@@ -25,6 +25,12 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .companion.bootstrap import bootstrap_companion
+from .profiles import workspace_profile
+from .rhythm import (
+    RhythmBudgetExceeded,
+    RhythmNotGranted,
+    RhythmRumination,
+)
 from .companion.profile import CompanionProfile
 from .companion.templates import DEFAULT_BOUNDARIES, DEFAULT_CLAIMS, DEFAULT_VALUES
 from .dignity.digestion import DigestStrategy
@@ -74,6 +80,39 @@ def _emit(payload: dict[str, Any], as_json: bool) -> None:
                 print(json.dumps(value, indent=2, sort_keys=True))
             else:
                 print(f"{key}: {value}")
+
+
+def _cmd_rhythm(args: argparse.Namespace) -> int:
+    """Run or inspect an instance's work rhythm.
+
+    The command is thin on purpose. Everything it can do is bounded by the
+    profile, the budget and the rumination stop, so there is nothing here for
+    an operator to get wrong that the framework would not already refuse.
+    """
+    protocol = DignityProtocol(
+        args.workspace, profile=workspace_profile(args.workspace).name
+    )
+    if args.reset:
+        rhythm = protocol.rhythm(args.instance)
+        rhythm.reset(actor="operator")
+        _emit({"reset": True, "instance": args.instance}, bool(args.json))
+        return 0
+    rhythm = protocol.rhythm(args.instance)
+    ran = []
+    for _index in range(max(0, args.cycles)):
+        try:
+            ran.append(rhythm.tick(force=args.force).to_dict())
+        except (RhythmNotGranted, RhythmRumination, RhythmBudgetExceeded) as error:
+            if args.json:
+                _emit({"error": str(error), "cycles": ran}, True)
+            else:
+                print(f"error: {error}", file=sys.stderr)
+            return EXIT_INVALID
+    _emit(
+        {"instance": args.instance, "cycles": ran, "report": rhythm.report()},
+        bool(args.json),
+    )
+    return 0
 
 
 def _cmd_companion_create(args: argparse.Namespace) -> int:
@@ -445,6 +484,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    rhythm_cmd = sub.add_parser(
+        "rhythm",
+        help="run or inspect one instance's work rhythm (research profile)",
+    )
+    rhythm_cmd.add_argument("--workspace", required=True)
+    rhythm_cmd.add_argument("--instance", required=True, help="the instance id")
+    rhythm_cmd.add_argument(
+        "--cycles",
+        type=int,
+        default=1,
+        help="how many cycles to run; the rhythm still refuses when not due",
+    )
+    rhythm_cmd.add_argument(
+        "--force",
+        action="store_true",
+        help="run a cycle even if the interval has not elapsed",
+    )
+    rhythm_cmd.add_argument(
+        "--reset",
+        action="store_true",
+        help="let a stopped rhythm run again, as the operator",
+    )
+    rhythm_cmd.add_argument(
+        "--json", action="store_true", help="emit machine-readable JSON"
+    )
+    rhythm_cmd.set_defaults(func=_cmd_rhythm)
 
     companion = sub.add_parser("companion", help="create and manage companion instances")
     companion_sub = companion.add_subparsers(dest="subcommand", required=True)

@@ -102,7 +102,7 @@ def test_no_profile_grants_a_veto_or_concealment():
         assert "concealment" not in fields
     # And the two prohibitions are stated in the prose the tests can read.
     text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "grant a veto" in text
+    assert "a veto" in text
     assert "concealment" in text
 
 

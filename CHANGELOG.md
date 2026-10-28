@@ -28,6 +28,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it, so a restarted rhythm reads the journal and does not wake up spinning.
 - The rhythm produces work and a metadata-only record. It makes no claim about
   itself, and nothing in it reads content.
+- `pmc rhythm --workspace W --instance I [--cycles N] [--force] [--reset]` runs
+  or inspects a rhythm from the command line, and a dignity instance is refused
+  one there exactly as it is refused one in the API.
+- A profile named on construction is now written to the workspace, so the next
+  call without one reads the same profile instead of reverting to the default.
+  The command path and the library path now agree.
 
 **The dream is externally evaluated in both profiles** (`src/pmc/profiles.py`, `README.md`, `docs/claims.md`)
 

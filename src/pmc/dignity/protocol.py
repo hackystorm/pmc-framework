@@ -204,9 +204,21 @@ class DignityProtocol:
 
         # The profile is structural, so it is resolved once and refused here
         # rather than discovered later, when something has already happened.
-        from ..profiles import profile_or_default
+        from ..profiles import (
+            profile_or_default,
+            workspace_profile,
+            write_workspace_profile,
+        )
 
-        self.profile = profile_or_default(profile)
+        self.profile = profile_or_default(
+            profile if profile is not None else workspace_profile(self.workspace).name
+        )
+        # A profile named on construction is remembered, so the next call
+        # without one reads the same one instead of quietly reverting to the
+        # default. Writing only on a change keeps the file out of the way.
+        recorded = workspace_profile(self.workspace).name
+        if recorded != self.profile.name:
+            write_workspace_profile(self.workspace, self.profile)
         self.registry = InstanceRegistry(self.journal_path)
         self.ledger = LoadLedger(policy)
         self.detector = RuminationDetector(rumination_threshold)

@@ -5,6 +5,9 @@
 from __future__ import annotations
 
 import json
+
+from pmc.dignity.protocol import DignityProtocol
+from pmc.dignity.records import Instance
 import shlex
 import sys
 
@@ -318,3 +321,36 @@ def test_dream_rolls_back_on_a_bad_gate(capsys, tmp_path):
     assert not (checkpoint / "dream.txt").exists()
     dreams = (workspace / "sidecar" / "dreams.jsonl").read_text(encoding="utf-8")
     assert '"outcome": "rolled_back"' in dreams
+
+
+def test_a_dignity_instance_is_refused_a_rhythm(tmp_path, capsys):
+    """The command is thin, but the refusal still comes from the profile."""
+    workspace = tmp_path / "plain"
+    DignityProtocol(workspace).birth(Instance(instance_id="inst_001", name="Plain"))
+    code = main(["rhythm", "--workspace", str(workspace), "--instance", "inst_001"])
+    assert code == EXIT_INVALID
+    assert "no work rhythm" in capsys.readouterr().err
+
+
+def test_an_autonomous_instance_runs_a_rhythm(tmp_path, capsys):
+    workspace = tmp_path / "auto"
+    protocol = DignityProtocol(workspace, profile="autonomous")
+    protocol.birth(Instance(instance_id="inst_001", name="Oracle"))
+    code = main(
+        [
+            "rhythm",
+            "--workspace",
+            str(workspace),
+            "--instance",
+            "inst_001",
+            "--cycles",
+            "1",
+            "--force",
+            "--json",
+        ]
+    )
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["instance"] == "inst_001"
+    assert payload["report"]["cycles_spent"] == 1
+    assert payload["report"]["policy"]["rumination_floor"] > 0
