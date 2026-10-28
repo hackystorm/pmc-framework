@@ -35,8 +35,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
-DEFAULT_BOUND = 1.0
-"""The default width of the homeostasis band."""
+DEFAULT_BOUND = 0.75
+"""The declared operating band for the aggregate channel.
+
+This is a *declared* range, not a fitted one: the channel's scalars are bounded
+to the unit interval by construction, so a band as wide as the interval itself
+would make the criterion vacuous - nothing could leave it, and the null would
+score the same as the sample. The band is declared, published in the result,
+and an instance is free to declare a different one, because a channel that
+stays inside a band it chose after seeing the data is not being tested.
+"""
 
 
 @dataclass(frozen=True)
@@ -137,10 +145,14 @@ def homeostasis(
     """Does the derived state channel stay inside its bounds, and come back?
 
     ``readings`` is the sample, ``null_readings`` the random walk with the same
-    step distribution. The score is the share of readings inside the band plus
-    a half-weight for returning inside ``return_steps`` after a perturbation,
-    so a channel that never leaves scores the same as one that leaves and
-    comes back.
+    step distribution. The score is the share of readings inside the declared
+    band plus a half-weight for returning inside ``return_steps`` after a
+    perturbation, so a channel that never leaves scores the same as one that
+    leaves and comes back.
+
+    The band is narrower than the channel's own bounds, because a channel
+    bounded to ``[0, 1]`` by construction could never leave a band of ``1.0``
+    and the criterion would be vacuous. See ``DEFAULT_BOUND``.
     """
     if not readings or not null_readings:
         raise ValueError("homeostasis needs the sample and the null")

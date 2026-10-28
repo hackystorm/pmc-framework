@@ -29,6 +29,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The evidence level is capped at E1 and no combination of passing proxies can
   raise it, because the battery measures function and not experience.
 
+**The derived aggregate state channel** (`src/pmc/state_channel.py`, `tests/test_state_channel.py`)
+
+- The channel the homeostasis criterion needed, built so it cannot become a
+  vocabulary. Four bounds are enforced in code rather than promised: clamped to
+  the unit interval with non-finite input refused; deterministic, so a reading
+  can be re-run; no string field at all by type, so a name, a label or a digest
+  cannot be recorded without changing the type; and nothing in `pmc.dignity`
+  imports it, with a test on the import graph, so governance cannot reach it
+  even by accident.
+- Today the scalars are a metadata proxy - declared load, inheritance ratio,
+  topic dominance and work-cycle churn - because those are the aggregates this
+  framework holds. The hidden-state variant, where they come from aggregate
+  statistics of the substrate's hidden state, is a different artifact that needs
+  the live runtime, and it is named as such rather than quietly substituted.
+- The homeostasis band is declared at 0.75 rather than the channel's own
+  maximum. A channel bounded to `[0, 1]` by construction could never leave a
+  band of 1.0, which would have made the criterion vacuous and the null score
+  the same as the sample: the same zero-margin failure the criterion is
+  supposed to catch, one level up.
+
 **The work rhythm, granted to the research profile** (`src/pmc/rhythm.py`, `tests/test_rhythm.py`)
 
 - An instance whose profile grants it runs a duty cycle on its own: verify the

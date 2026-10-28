@@ -75,8 +75,13 @@ def calm(rng: random.Random, count: int = 40) -> list[float]:
 
 
 def drifting(rng: random.Random, count: int = 40) -> list[float]:
-    """The null: a random walk over the same range."""
-    return [round(rng.uniform(-1.6, 1.6), 6) for _ in range(count)]
+    """The null: readings drawn over the channel's own bounded range.
+
+    The channel cannot produce a value outside ``[0, 1]``, so a null that could
+    would not be a fair comparison. This one drifts across the whole range the
+    channel admits, which is what a channel not holding its band looks like.
+    """
+    return [round(rng.uniform(0.0, 1.0), 6) for _ in range(count)]
 
 
 # -- homeostasis ------------------------------------------------------------
@@ -97,13 +102,27 @@ def test_the_random_walk_null_fails():
     assert homeostasis(drifting(rng), calm(rng)).passed is False
 
 
-def test_a_channel_that_leaves_and_does_not_return_fails():
+def test_the_band_is_narrower_than_the_channels_own_bounds():
+    """A band as wide as the interval would make the criterion vacuous.
+
+    The channel's scalars are bounded to ``[0, 1]`` by construction, so a band
+    of 1.0 would let nothing leave, and the null would score the same as the
+    sample. The band is declared and published instead.
+    """
+    result = homeostasis(calm(random.Random(4)), drifting(random.Random(4)))
+    assert result.detail["bound"] < 1.0
+    bounded_null = [round(random.Random(3).uniform(0.0, 1.0), 6) for _ in range(10)]
+    flat = [0.5] * 10
+    vacuous = homeostasis(flat, bounded_null, bound=1.0)
+    assert vacuous.value == vacuous.null_value == 1.0
+
+
+def test_a_channel_that_sits_outside_the_band_fails():
     rng = random.Random(9)
-    trapped = drifting(rng)
-    for index in range(0, len(trapped), 3):
-        trapped[index] = 5.0
+    trapped = [0.95] * 30
     result = homeostasis(trapped, drifting(rng))
     assert result.passed is False
+    assert result.detail["sample"]["inside"] == 0
 
 
 # -- continuity -------------------------------------------------------------

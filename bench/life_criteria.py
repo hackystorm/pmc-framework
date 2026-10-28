@@ -26,18 +26,77 @@ from pathlib import Path
 from typing import Any
 
 from pmc.dignity.protocol import DignityProtocol
+from pmc.dignity.records import Instance
 from pmc.life_criteria import (
     BatteryReport,
     boundaries,
     continuity,
+    homeostasis,
     reproduction,
     response,
 )
+from pmc.state_channel import StateChannel
 
 UNMEASURED_REASON = (
     "the derived aggregate state channel does not exist yet; readings were not "
     "invented to fill the row"
 )
+
+
+def channel_readings() -> tuple[list[float], list[float]]:
+    """The homeostasis series and its random-walk null, from the real channel.
+
+    The channel is fed the ledger aggregates of a probe instance, through the
+    protocol's own API: a quiet start, three admissions that raise the declared
+    load, and three digestions that bring it down. That is a real excursion and
+    a real return, measured through the derived channel rather than invented.
+
+    The null is a random walk over the same bounded range, which is the drift
+    the criterion exists to reject.
+    """
+    import random
+
+    from pmc.dignity.digestion import DigestStrategy
+    from pmc.dignity.records import MemoryRecord, Provenance, ProvenanceKind
+
+    probe = DignityProtocol(
+        Path(_tempdir()) / "homeostasis-probe", profile=None
+    )
+    probe.birth(Instance(instance_id="probe_homeostasis", name="Probe"))
+    channel = StateChannel()
+
+    def token() -> None:
+        channel.record_from_ledger(probe.ledger)
+
+    for index in range(6):
+        token()
+    for index in range(3):
+        probe.admit(
+            MemoryRecord(
+                record_id=f"probe_mem_{index}",
+                content_digest="b" * 64,
+                provenance=Provenance(kind=ProvenanceKind.OWN),
+                emotional_load=0.9,
+                topics=("probe",),
+            )
+        )
+        token()
+        token()
+    for index in range(3):
+        probe.digest(f"probe_mem_{index}", DigestStrategy.DISTILL)
+        token()
+        token()
+    readings = channel.series()
+    rng = random.Random(20261028)
+    null = [round(rng.uniform(0.0, 1.0), 6) for _ in readings]
+    return readings, null
+
+
+def _tempdir() -> str:
+    import tempfile
+
+    root = tempfile.mkdtemp(prefix="pmc-life-")
+    return root
 
 
 def continuity_sessions(protocol: DignityProtocol, instance_id: str) -> tuple[dict, dict]:
@@ -153,12 +212,14 @@ def run(workspace: str | Path, instance_id: str) -> dict[str, Any]:
     trace = decision_trace(protocol, instance_id)
     rows, shuffled = rhythm_pairs(protocol, instance_id)
 
+    readings, null_readings = channel_readings()
     results = [
+        homeostasis(readings, null_readings),
         continuity(before, after),
         reproduction(tree),
         boundaries(trace),
     ]
-    unmeasured = ["homeostasis"]
+    unmeasured: list[str] = []
     if rows:
         results.append(response(rows, shuffled))
     else:

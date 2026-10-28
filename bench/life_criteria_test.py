@@ -40,20 +40,47 @@ def rhythm_cycles(root: Path, instance_id: str = "inst_001") -> int:
 
 
 class HarnessTest(unittest.TestCase):
-    def test_homeostasis_is_reported_as_not_measured(self):
+    def test_homeostasis_is_measured_on_the_real_channel(self):
+        """The criterion that used to be missing is now measured, and published.
+
+        The series comes from the derived aggregate channel driven through the
+        protocol's own API - a quiet start, admissions that raise the declared
+        load, digestions that bring it down - so the reading is a real
+        excursion rather than an invented one.
+        """
         root = workspace_with()
         payload = life_criteria.run(root, "inst_001")
-        self.assertIn("homeostasis", payload["unmeasured"])
-        self.assertIn("homeostasis", payload["notes"])
-        self.assertIn("does not exist yet", payload["notes"]["homeostasis"])
-        # The row is not filled with a number, so it is not in the results.
         names = [result["criterion"] for result in payload["results"]]
-        self.assertNotIn("homeostasis", names)
+        self.assertIn("homeostasis", names)
+        self.assertNotIn("homeostasis", payload["unmeasured"])
+        found = {result["criterion"]: result for result in payload["results"]}
+        homeostasis = found["homeostasis"]
+        self.assertEqual(homeostasis["detail"]["sample"]["inside"],
+                         homeostasis["detail"]["sample"]["total"])
+        self.assertLess(homeostasis["null_value"], homeostasis["value"])
 
-    def test_an_unmeasured_criterion_caps_the_evidence_level(self):
+    def test_the_band_is_declared_and_narrower_than_the_bounds(self):
         root = workspace_with()
+        payload = life_criteria.run(root, "inst_001")
+        found = {result["criterion"]: result for result in payload["results"]}
+        self.assertLess(found["homeostasis"]["detail"]["bound"], 1.0)
+
+    def test_one_failing_criterion_caps_the_evidence_level(self):
+        """A response that never changes anything holds the battery at E1.
+
+        The level is capped by the failing criterion, not by a missing one, so
+        the battery can rise when the instance starts doing work that changes
+        something.
+        """
+        root = workspace_with()
+        protocol = DignityProtocol(root)
+        cycle = protocol.rhythm("inst_001")
+        cycle.enqueue_kind(WORK_VERIFY_JOURNAL)
+        cycle.tick(force=True)
         payload = life_criteria.run(root, "inst_001")
         self.assertEqual(payload["evidence_level"], "E1")
+        failed = [r["criterion"] for r in payload["results"] if not r["passed"]]
+        self.assertIn("response", failed)
 
     def test_the_harness_runs_on_a_real_workspace(self):
         root = workspace_with()
