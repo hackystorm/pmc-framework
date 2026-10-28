@@ -97,6 +97,38 @@ that the resulting systems are conscious.
 6. **Negative results are publishable.** The evaluation suite is designed to
    fail as easily as it passes.
 
+## Reading an inner state, and why this framework may do it once
+
+D-17 forbids reading, classifying, naming or gating inner state *content*. The
+derived channel does none of those, and the boundary is mechanical rather than
+intentional: it holds four bounded aggregates of a hidden vector - its
+magnitude, the change in that magnitude, its dispersion, and how that magnitude
+sits from the recent ones - and stores nothing else.
+
+Two properties are tested on the real extracted 350M and 8B hidden states rather
+than asserted:
+
+- **A hidden vector and a permutation of it give the same token.** Everything
+  the channel computes is invariant under reordering, so it is not an identity
+  function on the hidden state and cannot be turned back into what the vector
+  was about.
+- **Nothing vector-shaped survives a token.** The long-lived state is a pair of
+  scalars. An earlier version of the source kept the previous vector to compute
+  a distance between readings, and the test that says "keeps no vector" refused
+  it, so the drift became the change in magnitude instead. A vector-shaped
+  running mean was refused for the same reason: with a 0.9 decay it is 90% of
+  the previous vector.
+
+What the channel gives up is stated: it sees how big a state is and how that
+changed, never the direction it moved in. A reference magnitude chosen by hand
+saturates it - the 350M's 1024-dimensional vectors pin every energy reading at
+the ceiling against a scale of 64 - so the reference is derived from the
+extraction it measures, published in the report, and the saturation it would
+have caused is published beside it.
+
+This is a functional measurement of a substrate's statistics. It is not a
+measurement of experience, and nothing above it claims to be.
+
 ## The two profiles, and which one the claims are about
 
 The framework ships two instance profiles. **`dignity`** is the default and the

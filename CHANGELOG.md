@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**The hidden-state channel, measured on real hidden states** (`src/pmc/state_channel.py`, `bench/hidden_channel.py`, `tests/`, `docs/claims.md`)
+
+- `HiddenSource` turns a hidden vector into one bounded token made of four
+  aggregates - magnitude, the change in that magnitude, dispersion, and how the
+  magnitude sits from the recent ones - and keeps nothing else.
+- The boundary is mechanical rather than intentional, and two properties are
+  tested on the real extracted 350M and 8B states. A vector and a permutation of
+  it give the same token, so the channel is not an identity function on the
+  hidden state. And nothing vector-shaped survives a token: the long-lived state
+  is a pair of scalars.
+- The second property cost something and the cost is in the code. An earlier
+  version kept the previous vector to compute a distance between readings; the
+  test that says the source keeps no vector refused it, so the drift became the
+  change in magnitude. The vector-shaped running mean was refused for the same
+  reason, because with a 0.9 decay it is 90% of the previous vector.
+- A reference magnitude chosen by hand saturates the channel: against a scale
+  of 64, all 84 of the 350M's energy readings pin at the ceiling, and 25 of 84
+  do on the 8B. The reference is now derived from the extraction it measures,
+  published in the report, and the saturation it would have caused is published
+  beside it. A median reference was rejected because it saturates the upper half
+  by construction.
+- What the channel gives up is stated in the docs: it sees how big a state is
+  and how that changed, never the direction it moved in. It is a functional
+  measurement of substrate statistics, and nothing claims more of it.
+
 **The life-criteria battery** (`src/pmc/life_criteria.py`, `tests/test_life_criteria.py`, `bench/life_criteria.py`, `bench/life_criteria_test.py`)
 
 - Five criteria that turn the consequences of "consciousness is life" into

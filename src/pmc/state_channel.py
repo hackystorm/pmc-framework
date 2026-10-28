@@ -191,3 +191,145 @@ class StateChannel:
 def bounded_series(values: Iterable[float]) -> list[float]:
     """Clamp a series into the unit interval, refusing non-finite values."""
     return [_bounded(value, "reading") for value in values]
+
+
+# -- the hidden-state source ------------------------------------------------
+
+
+HIDDEN_FIELDS = ("energy", "drift", "spread", "novelty")
+"""The bounded scalars a hidden-state token carries.
+
+Each is an *aggregate* of the hidden vector - its magnitude, the change in
+that magnitude since the previous reading, its dispersion, and its distance
+from the running mean - and none of them is a dimension, a token, or anything
+that could identify what the vector was about.
+
+``drift`` is deliberately the *change in magnitude* rather than the distance
+between two readings. A distance would require keeping the previous vector,
+and a module that stores hidden vectors is not a channel that observes them:
+an earlier version of this source kept one, and the test that says "the source
+keeps no vector" caught it. The sacrifice is real and it is documented: the
+channel sees how big a state is and how that changed, never the direction it
+moved in.
+"""
+
+HIDDEN_TO_TOKEN = {
+    "energy": "pressure",
+    "drift": "inheritance",
+    "spread": "dominance",
+    "novelty": "churn",
+}
+"""Where each hidden aggregate lands on the token, and why they may share.
+
+The channel has one token shape, and the hidden source reuses it rather than
+adding fields, because a source-specific field would be a source-specific
+vocabulary. Which aggregate each slot holds is recorded here, in one place, so
+a reader of a token can tell what it was measured from.
+"""
+
+
+def _magnitude(vector: Sequence[float], scale: float) -> float:
+    """The vector's L2 norm, scaled by a declared reference magnitude."""
+    total = math.sqrt(sum(value * value for value in vector))
+    return _bounded(total / scale, "energy")
+
+
+def _dispersion(vector: Sequence[float], scale: float) -> float:
+    """The largest absolute coordinate, scaled, so the token sees spread."""
+    peak = max((abs(value) for value in vector), default=0.0)
+    return _bounded(peak / scale, "spread")
+
+
+class HiddenSource:
+    """Turns hidden vectors into channel tokens, keeping nothing else.
+
+    This is the source the protocol version of the channel needs, and it is
+    the one the metadata proxy cannot substitute for, because the question it
+    serves is about the substrate's own state rather than about the ledger.
+
+    The properties that make it safe are the point, and they are enforced
+    rather than intended:
+
+    - **No vector is stored.** The token is built and returned; the vector is
+      dropped. A token has no field that could hold one, and this class holds
+      no reference to one either.
+    - **Two vectors with the same aggregates give the same token.** So the
+      token cannot distinguish two facts that happen to share a magnitude, a
+      drift, a spread and a novelty, which is what stops it being an identity
+      function on the hidden state.
+    - **Every scalar is bounded and deterministic.** Same vector, same token.
+    """
+
+    def __init__(self, scale: float = 64.0, decay: float = 0.9) -> None:
+        if not (scale > 0.0):
+            raise ChannelError("the reference magnitude must be positive")
+        if not (0.0 < decay < 1.0):
+            raise ChannelError("the running-mean decay must be inside (0, 1)")
+        self.scale = float(scale)
+        self.decay = float(decay)
+        # Only scalars live past a token: the previous magnitude and the
+        # running mean *of the magnitude*. No vector-shaped state is kept, and
+        # that is total rather than partial - a vector-shaped running mean with
+        # a 0.9 decay is 90% of the previous vector, which is the previous
+        # vector. So a restart of the channel is a genuine reset and not a
+        # recovery of what it last saw.
+        self._previous_magnitude: float | None = None
+        self._magnitude_mean: float | None = None
+        self._seen = 0
+
+    def reset(self) -> None:
+        """Forget the running state, which is all the state there is."""
+        self._previous_magnitude = None
+        self._magnitude_mean = None
+        self._seen = 0
+
+    def token(self, vector: Sequence[float]) -> StateToken:
+        """One bounded token from one hidden vector, keeping nothing."""
+        if not vector:
+            raise ChannelError("the hidden source needs a non-empty vector")
+        for value in vector:
+            if not math.isfinite(float(value)):
+                raise ChannelError("the hidden source refuses a non-finite vector")
+        total = math.sqrt(sum(float(value) * float(value) for value in vector))
+        energy = _bounded(total / self.scale, "energy")
+        spread = _dispersion(vector, self.scale)
+        # The drift is the change in magnitude, not the distance between two
+        # readings: computing a distance would mean keeping the previous
+        # vector, which is the one thing this source must not do.
+        if self._previous_magnitude is None:
+            drift = 0.0
+        else:
+            drift = _bounded(
+                abs(total - self._previous_magnitude) / self.scale, "drift"
+            )
+        # Novelty is how far this reading's magnitude sits from the running
+        # mean of magnitudes, never a distance from a vector-shaped mean: a
+        # mean of recent vectors is most of the last vector.
+        if self._magnitude_mean is None:
+            novelty = 0.0
+        else:
+            novelty = _bounded(
+                abs(total - self._magnitude_mean) / self.scale, "novelty"
+            )
+        self._magnitude_mean = (
+            total
+            if self._magnitude_mean is None
+            else self.decay * self._magnitude_mean + (1.0 - self.decay) * total
+        )
+        self._previous_magnitude = total
+        self._seen += 1
+        return StateToken(
+            pressure=energy,
+            inheritance=drift,
+            dominance=spread,
+            churn=novelty,
+        )
+
+    def tokens(self, vectors: Iterable[Sequence[float]]) -> list[StateToken]:
+        """The tokens for a run of vectors, in order, keeping nothing else."""
+        self.reset()
+        return [self.token(vector) for vector in vectors]
+
+    def series(self, vectors: Iterable[Sequence[float]]) -> list[float]:
+        """The aggregate series over a run of vectors, as a bounded list."""
+        return [token.aggregate() for token in self.tokens(vectors)]
