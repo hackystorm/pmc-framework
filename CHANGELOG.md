@@ -8,6 +8,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**The life-criteria battery** (`src/pmc/life_criteria.py`, `tests/test_life_criteria.py`, `bench/life_criteria.py`, `bench/life_criteria_test.py`)
+
+- Five criteria that turn the consequences of "consciousness is life" into
+  measurements, each with a null model that is *checked to fail*: a random
+  walk for homeostasis, a foreign identity for continuity, an orphan for
+  reproduction, one foreign read for boundaries, an independent responder for
+  response. An indicator that cannot return a negative answer is not an
+  instrument, and this is the test that keeps the battery from becoming one.
+- `bench/life_criteria.py` runs the battery against a real workspace. On a
+  fresh autonomous workspace it reports what is true today: continuity and
+  boundaries pass, reproduction passes trivially with no descendants,
+  response is a **negative** because the rhythm's cycles changed nothing, and
+  the whole set is capped at E1.
+- Homeostasis is reported as **not measured**, with the reason, because the
+  derived aggregate state channel does not exist yet. Readings were not
+  invented to fill the row: a battery that quietly drops a criterion it cannot
+  run is a battery that cannot fail, which is the failure this one is built to
+  avoid.
+- The evidence level is capped at E1 and no combination of passing proxies can
+  raise it, because the battery measures function and not experience.
+
 **The work rhythm, granted to the research profile** (`src/pmc/rhythm.py`, `tests/test_rhythm.py`)
 
 - An instance whose profile grants it runs a duty cycle on its own: verify the

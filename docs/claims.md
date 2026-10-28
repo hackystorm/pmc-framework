@@ -141,6 +141,11 @@ they are the two places where the power could otherwise be misread:
 - That a default instance can do any of this. Replication, self-nominated
   succession and a survival drive are all research-profile behaviour and are
   refused by the default profile, in the protocol and not only in the docs.
+- That the life-criteria battery measures life, consciousness or experience. It
+  measures five functional proxies, each with a null model that fails, and its
+  evidence level is capped at E1 because one of the five cannot be run yet and
+  the other four are functional measurements. A passing proxy is not a passing
+  organism.
 - That any instance is conscious, phenomenal, sentient, or has experience.
 - That any model has passed a Turing test, or any other accepted test.
 - That self-report is evidence of anything. An instance saying "I am
