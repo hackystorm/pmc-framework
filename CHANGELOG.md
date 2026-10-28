@@ -53,6 +53,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   nothing moved, so there was nothing to respond to, and inventing that result
   is the one thing the battery cannot do.
 
+**A whole life, measured end to end** (`tests/test_instance_lifecycle.py`, `bench/life_criteria_test.py`)
+
+- One walk of the path a research-profile instance can take: replicate, hand
+  the memory over, nominate the successor, be confirmed, end, and leave an
+  auditable tree. Nine checks, including the two refusals that must still
+  work on this profile: a default instance cannot replicate, and an incomplete
+  termination is still refused (D-02 does not relax with autonomy).
+- The objection acts before the end and marks the termination contested. After
+  it there is nothing left to say, because the registry refuses an objection
+  from a terminated instance - that silence is the terminated contract, and it
+  is now tested rather than assumed.
+- On that lived workspace the battery reports E2 with **every criterion
+  measured and none at zero margin**: homeostasis +0.167, continuity +0.333,
+  reproduction +1.000 against an orphan null, boundaries +0.143, response
+  +1.000. Reproduction now has a real descendant to read instead of passing
+  trivially on an empty tree.
+- The response criterion also records the case it must not credit: a record
+  admitted before the rhythm starts is invisible to the first cycle, so the
+  answer stays unmeasured rather than handing the rhythm an answer it never
+  gave.
+
 **The derived aggregate state channel** (`src/pmc/state_channel.py`, `tests/test_state_channel.py`)
 
 - The channel the homeostasis criterion needed, built so it cannot become a

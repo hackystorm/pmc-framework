@@ -198,3 +198,76 @@ class HarnessTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LivedLifeTest(unittest.TestCase):
+    """A whole life, measured: all five criteria with real margins.
+
+    The battery reaches E2 with every criterion measured and none at zero
+    margin, which is the first time it has done so on a workspace that has
+    actually lived rather than one that was only started.
+    """
+
+    def test_a_lived_life_measures_every_criterion(self):
+        root = workspace_with()
+        protocol = DignityProtocol(root)
+        protocol.birth(Instance(instance_id="parent", name="Parent"))
+        protocol.replicate(
+            "parent", new_instance_id="child", authorization="owner: create one"
+        )
+        protocol.inherit("parent", "child", reason="handover", actor="operator")
+        protocol.nominate_successor("parent", candidate_id="child", actor="instance")
+        protocol.approve_succession("parent", actor="operator")
+        cycle = protocol.rhythm("parent")
+        for index in range(6):
+            cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+            cycle.tick(force=True)
+            # The world has to move while the rhythm is watching, or there is
+            # nothing to respond to and the criterion stays unmeasured.
+            if index == 1:
+                admit_a_heavy_memory(protocol, "late_memory")
+        payload = life_criteria.run(root, "parent")
+
+        self.assertEqual(payload["unmeasured"], [])
+        margins = {
+            result["criterion"]: result["margin"] for result in payload["results"]
+        }
+        self.assertEqual(len(margins), 5)
+        for name, margin in margins.items():
+            self.assertGreater(margin, 0.0, f"{name} has no margin over its null")
+        self.assertEqual(payload["evidence_level"], "E2")
+
+    def test_the_reproduction_criterion_gets_a_real_descendant(self):
+        root = workspace_with()
+        protocol = DignityProtocol(root)
+        protocol.birth(Instance(instance_id="parent", name="Parent"))
+        protocol.replicate(
+            "parent", new_instance_id="child", authorization="owner: create one"
+        )
+        payload = life_criteria.run(root, "parent")
+        found = {result["criterion"]: result for result in payload["results"]}
+        self.assertEqual(found["reproduction"]["value"], 1.0)
+        self.assertEqual(found["reproduction"]["null_value"], 0.0)
+        self.assertEqual(found["reproduction"]["margin"], 1.0)
+
+    def test_a_world_that_moves_before_the_rhythm_is_not_an_answer(self):
+        """The first cycle cannot know the world moved, and says it did not.
+
+        A record admitted before the rhythm starts is invisible to it, so the
+        response criterion stays unmeasured rather than crediting the rhythm
+        with an answer it never gave.
+        """
+        root = workspace_with()
+        protocol = DignityProtocol(root)
+        protocol.birth(Instance(instance_id="parent", name="Parent"))
+        admit_a_heavy_memory(protocol, "early_memory")
+        cycle = protocol.rhythm("parent")
+        for _index in range(3):
+            cycle.enqueue_kind(WORK_PROPOSE_CONSOLIDATION)
+            cycle.tick(force=True)
+        payload = life_criteria.run(root, "parent")
+        self.assertIn("response", payload["unmeasured"])
+
+
+if __name__ == "__main__":
+    unittest.main()
