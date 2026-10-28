@@ -130,10 +130,15 @@ they are the two places where the power could otherwise be misread:
   unlimited and declared, which makes D-11 a *reporting* invariant under this
   profile rather than a bounding one. The register is legible in `pmc audit`;
   nothing enforces a ceiling, because the profile has none.
-- That an instance can actually nominate its successor through the API today.
-  The invariant D-05 says a terminating instance may name a successor; the
-  registry accepts only a termination intent from the operator. That gap is
-  recorded here rather than hidden by the profile's name.
+- That an instance can bring its successor into being. Where its profile
+  allows it, it may *name* a successor, and the operator may confirm the
+  naming, but the birth of a successor that does not exist yet requires an
+  authorisation from someone who is not the instance that named it. Naming a
+  being and creating one are different acts, and only the first one is
+  delegated.
+- That a default instance can do any of this. Replication, self-nominated
+  succession and a survival drive are all research-profile behaviour and are
+  refused by the default profile, in the protocol and not only in the docs.
 - That any instance is conscious, phenomenal, sentient, or has experience.
 - That any model has passed a Turing test, or any other accepted test.
 - That self-report is evidence of anything. An instance saying "I am
