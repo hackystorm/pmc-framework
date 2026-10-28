@@ -18,6 +18,7 @@ from pathlib import Path
 from ..dignity.errors import InstanceAlreadyExists
 from ..dignity.protocol import DignityProtocol
 from ..dignity.records import Instance, sha256_of
+from ..profiles import profile_or_default, write_workspace_profile
 from .profile import CompanionProfile
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -77,8 +78,14 @@ def bootstrap_companion(
     substrate: str | None = None,
     create_identity: bool = True,
     overwrite_identity: bool = False,
+    instance_profile: str | None = None,
 ) -> CompanionWorkspace:
-    """Create the workspace, the identity seed and the instance record."""
+    """Create the workspace, the identity seed and the instance record.
+
+    ``instance_profile`` is the dignity profile the workspace is created
+    under, and it is written to disk: a research instance must not quietly
+    become a default one on the next call.
+    """
     root = Path(workspace)
     identity_dir = root / "identity"
     sidecar_dir = root / "sidecar"
@@ -102,7 +109,9 @@ def bootstrap_companion(
     profile_path = identity_dir / "profile.json"
     profile.save(profile_path)
 
-    protocol = DignityProtocol(root)
+    instance_profile_object = profile_or_default(instance_profile)
+    write_workspace_profile(root, instance_profile_object)
+    protocol = DignityProtocol(root, profile=instance_profile_object.name)
     instance = Instance(
         instance_id=instance_id,
         name=profile.agent_name,

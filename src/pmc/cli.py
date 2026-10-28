@@ -92,6 +92,7 @@ def _cmd_companion_create(args: argparse.Namespace) -> int:
         args.workspace,
         substrate=args.substrate,
         overwrite_identity=args.overwrite_identity,
+        instance_profile=getattr(args, "profile", None),
     )
     _emit(
         {
@@ -460,6 +461,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--opening-prompt-file",
         default=None,
         help="the instance's opening prompt, verbatim",
+    )
+    create.add_argument(
+        "--profile",
+        default=None,
+        help="instance profile: dignity (default) or autonomous (research)",
     )
     create.add_argument("--overwrite-identity", action="store_true")
     create.set_defaults(func=_cmd_companion_create)

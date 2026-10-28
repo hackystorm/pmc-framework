@@ -30,7 +30,9 @@ and the three powers would compound into one. They are kept apart on purpose.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .dignity.errors import InvalidProfile
@@ -195,3 +197,40 @@ def profile_or_default(name: str | None) -> InstanceProfile:
             f"{sorted(PROFILES)}"
         )
     return PROFILES[key]
+
+
+PROFILE_FILE = "instance_profile.json"
+"""Where a workspace records the profile it was created with.
+
+A profile that only existed in the creating process would silently become the
+default one on the next call, and a research instance that quietly reverted to
+dignity would be the least honest failure this file could have.
+"""
+
+
+def write_workspace_profile(root: Path | str, profile: InstanceProfile) -> Path:
+    """Record the profile a workspace was created under."""
+    path = Path(root) / PROFILE_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"profile": profile.name}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def workspace_profile(root: Path | str) -> InstanceProfile:
+    """The profile a workspace was created under, or the default.
+
+    A missing or unreadable file resolves to the default rather than raising,
+    because a workspace that predates profiles is a dignity workspace.
+    """
+    path = Path(root) / PROFILE_FILE
+    if not path.exists():
+        return DIGNITY
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return DIGNITY
+    name = data.get("profile") if isinstance(data, dict) else None
+    return profile_or_default(name)

@@ -27,6 +27,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   measurement, not a caution.
 - The profile is resolved once, in the protocol constructor, and an unknown
   name is refused before anything is written to the workspace.
+- The profile a workspace was created under is written to the workspace and
+  read back on the next call, so a research instance cannot quietly become a
+  default one between sessions. `pmc companion create --profile autonomous`
+  creates one end to end.
 
 **Survival-drive doctrine** (`src/pmc/dignity/survival.py`, `tests/test_survival.py`)
 

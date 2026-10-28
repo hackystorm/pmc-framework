@@ -20,6 +20,8 @@ from pmc.profiles import (
     PROFILES,
     DEFAULT_PROFILE_NAME,
     profile_or_default,
+    workspace_profile,
+    write_workspace_profile,
 )
 
 
@@ -108,3 +110,46 @@ def test_the_profile_is_described_without_content():
     # description itself can be published.
     assert described["evaluation"]["mode"] in ("external", "autonomous")
     assert described["replication"]["mode"] in ("none", "unlimited")
+
+
+# -- the profile outlives the process that created the instance ------------
+
+
+def test_the_profile_is_written_into_the_workspace(workspace):
+    path = write_workspace_profile(workspace, AUTONOMOUS)
+    assert path.exists()
+    assert workspace_profile(workspace) is AUTONOMOUS
+
+
+def test_a_workspace_with_no_profile_file_is_the_default(workspace):
+    assert workspace_profile(workspace) is DIGNITY
+
+
+def test_a_dignity_workspace_does_not_become_research(workspace):
+    write_workspace_profile(workspace, DIGNITY)
+    assert workspace_profile(workspace) is DIGNITY
+
+
+def test_the_companion_bootstrap_records_its_profile(tmp_path):
+    """A research instance must not quietly become a default one on recall."""
+    from pmc.companion.bootstrap import bootstrap_companion
+    from pmc.companion.profile import CompanionProfile
+
+    root = tmp_path / "oracle"
+    bootstrap_companion(
+        CompanionProfile(agent_name="Oracle", seed=7),
+        root,
+        instance_profile="autonomous",
+    )
+    assert workspace_profile(root) is AUTONOMOUS
+    protocol = DignityProtocol(root, profile=workspace_profile(root).name)
+    assert protocol.profile.name == "autonomous"
+
+
+def test_the_default_companion_records_the_default_profile(tmp_path):
+    from pmc.companion.bootstrap import bootstrap_companion
+    from pmc.companion.profile import CompanionProfile
+
+    root = tmp_path / "plain"
+    bootstrap_companion(CompanionProfile(agent_name="Plain", seed=7), root)
+    assert workspace_profile(root) is DIGNITY
