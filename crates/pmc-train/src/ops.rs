@@ -550,6 +550,34 @@ pub fn cross_entropy(logits: &[f32], targets: &[u32], mask: &[bool]) -> (f32, Ve
     ((loss / count as f64) as f32, dlogits)
 }
 
+/// Direct Preference Optimisation loss for one preference pair.
+///
+/// ```text
+///     L = -log sigma(beta * (logp_w - logp_l - (logp_ref_w - logp_ref_l)))
+/// ```
+/// The inputs are the (summed, not averaged) log-probabilities of the
+/// chosen and rejected sequences under the current and reference models.
+/// The result is a finite scalar; the caller derives the gradient from the
+/// existing backward pass (see the train_dpo example).
+pub fn dpo_loss(
+    logp_chosen: f32,
+    logp_rejected: f32,
+    logp_ref_chosen: f32,
+    logp_ref_rejected: f32,
+    beta: f32,
+) -> f32 {
+    let delta = (logp_chosen - logp_rejected) - (logp_ref_chosen - logp_ref_rejected);
+    let x = beta * delta;
+    // -log sigma(x) = softplus(-x), computed stably.
+    if x >= 20.0 {
+        0.0
+    } else if x <= -20.0 {
+        -x
+    } else {
+        (1.0 + (-x).exp()).ln()
+    }
+}
+
 /// Clip a collection of gradient slices by their global L2 norm.
 ///
 /// Returns the norm before clipping. A non-positive `max_norm` disables
@@ -1056,5 +1084,28 @@ mod tests {
         let macs = (m as f64) * (k as f64) * (n as f64);
         let gmacs = macs / elapsed / 1e9;
         println!("matmul_tiled {}x{}x{}: {:.3} GMAC/s", m, k, n, gmacs);
+    }
+
+    #[test]
+    fn dpo_loss_is_zero_at_equality() {
+        // When the model and the reference agree on the preference, the
+        // implicit reward is zero and the loss is -log 0.5.
+        let loss = dpo_loss(0.0, 0.0, 0.0, 0.0, 0.1);
+        assert!((loss - 0.693147).abs() < 1e-5, "got {loss}");
+    }
+
+    #[test]
+    fn dpo_loss_falls_when_chosen_is_preferred() {
+        // A large positive delta (chosen much more likely than rejected,
+        // relative to the reference) must drive the loss toward zero.
+        let loss = dpo_loss(10.0, 0.0, 0.0, 0.0, 1.0);
+        assert!(loss < 1e-4, "got {loss}");
+    }
+
+    #[test]
+    fn dpo_loss_rises_when_rejected_is_preferred() {
+        // The opposite: chosen less likely than rejected must raise the loss.
+        let loss = dpo_loss(0.0, 10.0, 0.0, 0.0, 1.0);
+        assert!(loss > 9.0, "got {loss}");
     }
 }
