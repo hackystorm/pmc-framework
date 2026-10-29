@@ -171,15 +171,14 @@ fn main() {
     let train_sha = sha256_hex(&train_bytes);
     let eval_sha = sha256_hex(&eval_bytes);
 
-    let embedding = TableEmbedding::random(vocab, d_model, embedding_seed);
-    // Consolidation: when PMC_BASELINE points at a checkpoint, load it
-    // instead of re-initialising, so the dream fine-tunes the existing
-    // substrate rather than starting from scratch.
     let mut model = match std::env::var("PMC_BASELINE") {
         Ok(path) => checkpoint::load(std::path::Path::new(&path))
             .expect("the baseline checkpoint must load"),
         Err(_) => config.init(model_seed),
     };
+    // Use the model's config for embedding dimension (correct for consolidation).
+    let embedding_dim = model.config.d_model;
+    let embedding = TableEmbedding::random(vocab, embedding_dim, embedding_seed);
     let mut optimiser = TransformerAdam::new(&model);
     let train_mask = vec![true; train_tokens.len()];
     let eval_mask = vec![true; eval_tokens.len()];
@@ -238,13 +237,13 @@ fn main() {
             "\"beat_baseline\":{},\"elapsed_millis\":{},\"checkpoint\":\"{}\"}}"
         ),
         source,
-        config.n_layer,
-        config.d_model,
-        config.n_head,
-        config.ffn_hidden,
-        config.vocab,
-        config.n_positions,
-        config.readout_rank,
+        model.config.n_layer,
+        model.config.d_model,
+        model.config.n_head,
+        model.config.ffn_hidden,
+        model.config.vocab,
+        model.config.n_positions,
+        model.config.readout_rank,
         param_count,
         steps,
         learning_rate,
