@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**M3: dream CLI path** (`bench/dream_consolidator.py`, `bench/dream_evaluator.py`)
+
+- End-to-end `pmc dream` run with an identity consolidator and a mechanics
+  evaluator: replay, taint check, consolidation, evaluation, gate, rollback.
+  The gate refused the no-op on recall_newer (newer_gain_min 0.001) and left
+  the checkpoint byte-identical. E2 for the CLI path. The consolidator and
+  evaluator are plumbing exercisers; a real consolidation and a real
+  six-metric evaluator remain as the M3 follow-up.
+
 **M2: dataset parsing module** (`src/pmc/data/ingest.py`)
 
 - Readers for CSV, TXT and Markdown (JSONL already in corpus.py), dedup by

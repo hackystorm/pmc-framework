@@ -556,6 +556,43 @@ number; this run establishes the measurement and the next attempt pre-registers
 a margin. The Python parity extension for the transformer remains (E1 for the
 trainer side until it lands).
 
+## Dream CLI path (M3, 2026-10-29)
+
+Pre-registration: one dream run through the `pmc dream` CLI with an identity
+consolidator (copies the baseline byte-for-byte) and a mechanics evaluator
+that reports the checkpoint as intact. The gate requires recall_newer to
+improve by at least newer_gain_min (0.001). An identity consolidation
+cannot improve anything, so the gate is expected to fail on recall_newer and
+roll back.
+
+Command:
+```
+python -m pmc.cli --json dream --workspace <workspace> --checkpoint <checkpoint> \\
+  --trainer "python bench/dream_consolidator.py" \\
+  --evaluator "python bench/dream_evaluator.py" --limit 4 --seed 20261027
+```
+
+Raw numbers (one run, 2026-10-29):
+- record_ids: ["mem_001"]
+- sources: ["aaaa...aaaa" (64 hex)]
+- metrics_before == metrics_after: recall_older 1.0, recall_newer 1.0,
+  interference 0.0, calibration 0.0, identity 1.0, false_memory 0.0
+- gate: passed false; reasons: ["recall_newer"]
+  (recall_newer: before 1.0, after 1.0, bound 1.001, delta 0.0, ok false)
+- outcome: rolled_back
+- reason: the gate failed
+- checkpoint before/after digest: identical (rollback byte-identical)
+
+Interpretation (E2: integration with a real workspace, sidecar and CLI path):
+the CLI dream path works end to end - replay, taint check, consolidation,
+evaluation, gate, rollback - and the gate correctly refuses a no-op
+consolidation on recall_newer, leaving the original checkpoint
+byte-identical. The identity consolidator and the mechanics evaluator are
+exercising the plumbing, not a model: their metrics are fixed values, not
+measurements. A real consolidation (training on replayed memory that
+improves recall_newer) and a real evaluator (measuring the six metrics on
+held-out memory) remain as the M3 follow-up.
+
 ## The loop
 
 ```

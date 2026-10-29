@@ -202,6 +202,16 @@ margin; interference at most 0.05; false-memory rate at most 0.05;
 calibration drift at most 0.02; identity stable. A failed run rolls back
 byte-identically (mechanics already tested). **Evidence:** E3.
 
+**Status (2026-10-29):** CLI path exercised end to end (E2). Identity
+consolidator + mechanics evaluator run through `pmc dream`: replay, taint
+check, consolidation, evaluation, gate, rollback. The gate correctly
+refused the no-op on recall_newer (newer_gain_min 0.001) and left the
+checkpoint byte-identical. The consolidator and evaluator are plumbing
+exercisers, not measurements: their metrics are fixed values. A real
+consolidation (training on replayed memory that improves recall_newer) and
+a real evaluator (measuring the six metrics on held-out memory) remain as
+the M3 follow-up.
+
 ### M4 — Cross-host state v5 (independent of M1-M3)
 
 **Objective.** A cross-host interface that passes the pre-registered Substrate
