@@ -281,8 +281,18 @@ adds `Provider` (keys read from the environment only, never from files),
 (budget + resource event + taint mark). `ChatClient` gained an `api_key`
 parameter that emits an `Authorization: Bearer` header. Measured:
 `pytest tests/test_providers.py` 15 passed, exit 0; full suite 426 passed,
-8 skipped, exit 0. The tool surface (`tools` on `/v1/chat/completions` and
-the declared tool registry) remains as M6b.
+8 skipped, exit 0.
+
+**Status (2026-10-29):** second sub-package delivered (M6b). `src/pmc/runtime/tools.py`
+adds a declared tool registry (`memory.remember`, `memory.restore`,
+`state.read`, `dream.propose`) with validation, handlers backed by the
+session/store/protocol, and resource-event journaling. The live server now
+accepts a `tools` array and `tool`-role messages on `/v1/chat/completions`,
+validates them, and exposes `execute_tool` through `LiveHTTPServer` and
+`make_server`. Measured: `pytest tests/test_tools.py` 8 passed, exit 0;
+full suite 434 passed, 8 skipped, exit 0. M6 is complete at the mechanism
+level; the tool loop against a real model remains (the live engine does not
+emit tool calls on its own).
 
 ### M7 — Packaging and release (needs M0-M6)
 

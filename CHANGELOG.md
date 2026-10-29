@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**M6b: tool surface** (`src/pmc/runtime/tools.py`, `src/pmc/runtime/live_server.py`)
+
+- Declared tool registry (memory.remember, memory.restore, state.read,
+  dream.propose) with validation, handlers backed by session/store/protocol,
+  and resource-event journaling. The live server now accepts a tools array
+  and tool-role messages on /v1/chat/completions, validates them, and
+  exposes execute_tool. Measured: 8 tests pass, exit 0; full suite 434
+  passed, 8 skipped, exit 0.
+
 **M6a: BYOK provider layer** (`src/pmc/runtime/providers.py`)
 
 - Provider registry (JSON file, keys from environment only), ResourceBudget

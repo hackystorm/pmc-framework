@@ -36,7 +36,7 @@ from .live_state import DEFAULT_LEARNING_RATE
 
 MAX_BODY_BYTES = 1 << 20
 
-_ROLES = ("system", "user", "assistant")
+_ROLES = ("system", "user", "assistant", "tool")
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -153,19 +153,43 @@ class _Handler(BaseHTTPRequestHandler):
             content = message.get("content")
             if role not in _ROLES:
                 raise ValueError(
-                    f"messages[{index}].role must be system, user or assistant"
+                    f"messages[{index}].role must be one of {_ROLES}"
                 )
-            if not isinstance(content, str) or not content:
-                raise ValueError(
-                    f"messages[{index}].content must be a non-empty string"
-                )
-            messages.append({"role": role, "content": content})
+            if role == "tool":
+                if not isinstance(content, str):
+                    raise ValueError(
+                        f"messages[{index}].content must be a string"
+                    )
+            else:
+                if not isinstance(content, str) or not content:
+                    raise ValueError(
+                        f"messages[{index}].content must be a non-empty string"
+                    )
+            messages.append({"role": role, "content": content if isinstance(content, str) else ""})
+
+        raw_tools = payload.get("tools")
+        tools: list[dict[str, Any]] | None = None
+        if raw_tools is not None:
+            if not isinstance(raw_tools, list):
+                raise ValueError("tools must be an array")
+            validated: list[dict[str, Any]] = []
+            for index, tool in enumerate(raw_tools):
+                if not isinstance(tool, dict):
+                    raise ValueError(f"tools[{index}] must be an object")
+                if tool.get("type") != "function":
+                    raise ValueError(f"tools[{index}].type must be 'function'")
+                function = tool.get("function")
+                if not isinstance(function, dict) or not function.get("name"):
+                    raise ValueError(f"tools[{index}].function.name is required")
+                validated.append(tool)
+            tools = validated
 
         return {
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stops": self._stops(payload.get("stop")),
+            "tools": tools,
         }
 
     @staticmethod
@@ -247,7 +271,7 @@ class _Handler(BaseHTTPRequestHandler):
                 "choices": [
                     {
                         "index": 0,
-                        "message": {"role": "assistant", "content": text},
+                        "message": {"role": "assistant", "content": text, "tool_calls": None},
                         "finish_reason": finish_reason,
                         "logprobs": None,
                     }
@@ -267,16 +291,29 @@ class LiveHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address: tuple[str, int], engine: Any) -> None:
+    def __init__(
+        self, address: tuple[str, int], engine: Any, tool_registry: Any = None
+    ) -> None:
         self.engine = engine
+        self.tool_registry = tool_registry
         super().__init__(address, _Handler)
+
+    def execute_tool(self, name: str, arguments: dict[str, Any]) -> str:
+        """Run one declared tool through the registry, or raise ToolError."""
+        if self.tool_registry is None:
+            raise ValueError("no tool registry attached to this server")
+        context = {"engine": self.engine}
+        return self.tool_registry.call(name, arguments, context)
 
 
 def make_server(
-    engine: Any, host: str = "127.0.0.1", port: int = 8080
+    engine: Any,
+    host: str = "127.0.0.1",
+    port: int = 8080,
+    tool_registry: Any = None,
 ) -> LiveHTTPServer:
     """Bind an engine to a local HTTP port (port 0 picks a free port)."""
-    return LiveHTTPServer((host, port), engine)
+    return LiveHTTPServer((host, port), engine, tool_registry=tool_registry)
 
 
 def main(argv: list[str] | None = None) -> int:
