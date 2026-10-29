@@ -138,6 +138,17 @@ CREDENTIAL_WORDS = (
 # are the tests that enforce the rule and therefore have to name it.
 PERSONAL_CHECK_EXEMPT = frozenset({"tests/test_companion.py"})
 
+# Files that legitimately reference credential field names (api_key and
+# friends) because they implement or test the BYOK layer. They read keys
+# from the environment; they never store them.
+SECRETS_CHECK_EXEMPT = frozenset(
+    {
+        "src/pmc/runtime/client.py",
+        "src/pmc/runtime/providers.py",
+        "tests/test_providers.py",
+    }
+)
+
 # The phrases that identify the canonical GPL-3.0 text.
 GPL_REQUIRED_PHRASES = (
     "GNU GENERAL PUBLIC LICENSE",
@@ -256,6 +267,8 @@ def check_secrets(files: list[Path]) -> list[str]:
     findings: list[str] = []
 
     for path in files:
+        if relative(path) in SECRETS_CHECK_EXEMPT:
+            continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), start=1):
 
