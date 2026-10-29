@@ -100,18 +100,18 @@ def main() -> int:
     env["PMC_BASELINE"] = str(baseline)
     env["PMC_STEPS"] = env.get("PMC_STEPS", "10")
     env["PMC_LR"] = env.get("PMC_LR", "0.01")
-    env["PMC_N_LAYER"] = env.get("PMC_N_LAYER", "2")
-    env["PMC_D_MODEL"] = env.get("PMC_D_MODEL", "32")
-    env["PMC_N_HEAD"] = env.get("PMC_N_HEAD", "4")
-    env["PMC_FFN"] = env.get("PMC_FFN", "64")
+    env["PMC_N_LAYER"] = env.get("PMC_N_LAYER", "12")
+    env["PMC_D_MODEL"] = env.get("PMC_D_MODEL", "2048")
+    env["PMC_N_HEAD"] = env.get("PMC_N_HEAD", "16")
+    env["PMC_FFN"] = env.get("PMC_FFN", "5632")
     env["PMC_VOCAB"] = env.get("PMC_VOCAB", "256")
-    env["PMC_N_POS"] = env.get("PMC_N_POS", "512")
-    env["PMC_RANK"] = env.get("PMC_RANK", "8")
+    env["PMC_N_POS"] = env.get("PMC_N_POS", "4096")
+    env["PMC_RANK"] = env.get("PMC_RANK", "128")
     env["PMC_HOLDOUT"] = env.get("PMC_HOLDOUT", "8")
     env["PMC_EMBEDDING_SEED"] = env.get("PMC_EMBEDDING_SEED", "20261032")
 
     result = subprocess.run(
-        [_cargo(), "run", "--offline", "--example", "train_lm"],
+        [_cargo(), "run", "--release", "--offline", "--example", "train_lm"],
         cwd=Path(__file__).resolve().parents[1] / "crates",
         env=env,
         capture_output=True,

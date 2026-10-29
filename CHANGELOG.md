@@ -41,11 +41,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Authorization header. Measured: 15 tests pass, exit 0; full suite 426
   passed, 8 skipped, exit 0. The tool surface (M6b) remains.
 
-**M3: real consolidation on multiple memories** (`bench/dream_consolidator_content.py`)
+**M3: real consolidation on 12B model** (`bench/dream_consolidator_content.py`)
 
-- Consolidator fetched 3 memories' content and trained on the concatenation.
-  recall_newer 0.002783 -> 0.000086, gate refused (bound 0.003783).
-  Negative recorded in docs/lab.md.
+- Consolidator fetches memory content from the private store (D-17
+  preserved), tokenises it as UTF-8 bytes, and fine-tunes the baseline.
+  Tested on 12B model (616M params, 12 layers) with single and multiple
+  memories. Gate refused (recall_newer 0.000139 -> 4e-06 on 3 memories).
+  Negative recorded in docs/lab.md. The mechanism works end to end;
+  the consolidation strategy (concatenation of short memories) did not
+  improve the held-out metric.
+
+**M3: real consolidation on multiple memories** (`bench/dream_consolidator_content.py`)
 
 **M3: real consolidation on content** (`bench/dream_consolidator_content.py`)
 
