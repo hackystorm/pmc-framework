@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**The lm trainer** (`crates/pmc-train/examples/train_lm.rs`)
+
+- Third M1 work package: a decoder-only transformer trained on a token
+  sequence with next-token prediction, a held-out suffix scored before and
+  after, a checkpoint write, and a JSON report carrying the random-init
+  baseline beside the final number. Measured on a 64-token pseudo sequence,
+  2 layers, 136512 parameters, 30 steps: train loss 5.700954 to 0.000372,
+  baseline eval loss 5.502320, final eval loss 14.372885, final perplexity
+  1746081.63, beat_baseline false. The mechanism is in place and
+  reproducible; the gate is not met on this data, recorded as a negative in
+  docs/lab.md.
+
 **The corpus module** (`src/pmc/data/`)
 
 - Second M1 work package: `CorpusRecord` with validated id/text/split, per-record

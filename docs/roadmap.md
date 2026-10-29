@@ -125,6 +125,18 @@ metadata-only GGUF roundtrip and an env-gated real-model roundtrip
 (`PMC_TEST_GGUF`). Remaining M1 work at that point: the corpus format and
 sharding, then the next-token loss in `pmc-train`.
 
+**Status (2026-10-29):** third work package delivered - `crates/pmc-train/examples/train_lm.rs`
+trains a decoder-only transformer on a token sequence with next-token prediction,
+holds out a suffix, scores it before and after, writes a checkpoint, and prints a
+JSON report with the random-init baseline beside the final number. Measured on
+a 64-token pseudo sequence, 2 layers, 136512 parameters, 30 steps: train loss
+5.700954 to 0.000372 (memorised), baseline eval loss 5.502320, final eval
+loss 14.372885, final perplexity 1746081.63, beat_baseline false. The
+mechanism is in place and reproducible; the gate is NOT met on this data -
+recorded as a negative in docs/lab.md. Remaining M1 work: a real corpus
+(TinyStories subset) and a pre-registered margin, plus the Rust/Python parity
+extension for the text path.
+
 **Status (2026-10-29):** second work package delivered - `src/pmc/data/`
 corpus module: `CorpusRecord` (validated id/text/split), per-record and
 whole-corpus SHA-256 digests (order-independent), JSONL parse/write,

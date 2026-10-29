@@ -472,6 +472,48 @@ Per the pre-registration, the failure is recorded and the line pivots to the
 50M core as a task learner. The evaluation cues and the control questions were
 never read by the gate: they stay untouched for the attempt that would follow.
 
+## LM text path (M1, 2026-10-29)
+
+Pre-registration: a decoder-only transformer is trained on a token sequence
+with next-token prediction; a held-out suffix of the same sequence is scored
+before and after. The gate requires the final held-out loss to be below the
+random-init held-out loss. The held-out suffix is never seen during training.
+
+Command:
+```
+PMC_STEPS=30 PMC_LR=0.01 PMC_N_LAYER=2 PMC_D_MODEL=64 PMC_N_HEAD=4 \\
+  PMC_FFN=256 PMC_VOCAB=256 PMC_N_POS=64 PMC_RANK=8 PMC_HOLDOUT=8 \\
+  cargo run --release --offline --example train_lm
+```
+(Tokens default to a deterministic pseudo sequence; `PMC_TOKENS` points at a
+file with one integer per line or a JSON array, and `PMC_EVAL_TOKENS` overrides
+the held-out suffix.)
+
+Raw numbers (one run, 2026-10-29):
+- train_tokens: 56, eval_tokens: 8, holdout: 8
+- param_count: 136512
+- initial_train_loss: 5.700954
+- final_train_loss: 0.000372 (memorised)
+- baseline_eval_loss: 5.502320 (random init)
+- final_eval_loss: 14.372885
+- baseline_eval_perplexity: 245.26
+- final_eval_perplexity: 1746081.63
+- beat_baseline: false
+- train_sha256: b88fcf61af084190045870e3d8883d6d78a858af826fef280594ca65fb0f3810
+- eval_sha256: ee0ad2b4d2febfe256b30a5fe8bea8c120634545ae29b5aaaa0554af6ef56a72
+- elapsed_millis: 2487
+
+Interpretation (bounded by E3 for the mechanism, E1 for the generalisation
+claim): the training path works and overfits the training positions, but on
+this 64-token pseudo sequence the held-out suffix is worse after training
+than at random init. The gate is not met. The negative is specific to the
+data, not to the mechanism: 56 training positions are not enough to
+generalise, and a 64-token pseudo sequence is not a corpus. The next attempt
+needs a real corpus (TinyStories subset or larger) and a pre-registered
+margin; no post-hoc tuning of this run is permitted. The mechanism itself -
+next-token loss, checkpoint write, held-out scoring, reproducible command -
+is in place and measured.
+
 ## The loop
 
 ```

@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Configuration for the lm trainer (crates/pmc-train/examples/train_lm.rs).
+#
+# STATUS: the example reads environment variables, not this file, so this
+# document is the recorded settings of the measured run rather than an
+# input. It exists so the run is reproducible from a file and a seed, per
+# the reproducibility rule.
+
+{
+  "name": "lm-trainer",
+  "description": "First text training path: a small decoder-only transformer on a token sequence, with a held-out suffix scored before and after.",
+  "seed": {
+    "model": 20261031,
+    "embedding": 20261032
+  },
+  "steps": 30,
+  "learning_rate": 0.01,
+  "holdout": 8,
+  "config": {
+    "n_layer": 2,
+    "d_model": 64,
+    "n_head": 4,
+    "ffn_hidden": 256,
+    "vocab": 256,
+    "n_positions": 64,
+    "readout_rank": 8
+  },
+  "param_count": 136512,
+  "task": {
+    "name": "next-token-prediction",
+    "tokens": 64,
+    "train_tokens": 56,
+    "eval_tokens": 8,
+    "train_sha256": "b88fcf61af084190045870e3d8883d6d78a858af826fef280594ca65fb0f3810",
+    "eval_sha256": "ee0ad2b4d2febfe256b30a5fe8bea8c120634545ae29b5aaaa0554af6ef56a72",
+    "source": "deterministic pseudo sequence ((i * 37 + 11) % 256); not a corpus"
+  },
+  "result": {
+    "initial_train_loss": 5.700954,
+    "final_train_loss": 0.000372,
+    "baseline_eval_loss": 5.502320,
+    "final_eval_loss": 14.372885,
+    "baseline_eval_perplexity": 245.26,
+    "final_eval_perplexity": 1746081.63,
+    "beat_baseline": false
+  },
+  "gate": "M1 (pre-registered): final held-out loss below the random-init held-out loss. NOT MET on this run.",
+  "notes": [
+    "The mechanism - next-token loss, checkpoint write, held-out scoring, reproducible command - is in place and measured.",
+    "The negative is specific to the data: 56 training positions on a 64-token pseudo sequence overfit and do not generalise.",
+    "No post-hoc tuning of this run is permitted; the next attempt uses a real corpus and a pre-registered margin."
+  ]
+}
