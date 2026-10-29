@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 from pmc.cli import EXIT_INVALID, EXIT_OK, main
@@ -16,17 +17,37 @@ def run(capsys, argv):
     return code, captured.out, captured.err
 
 
+FAKE_PAYLOAD = (
+    "import json, sys\n"
+    "print(json.dumps({{'argv': sys.argv[1:]}}))\n"
+    "if {stderr!r}:\n"
+    "    print({stderr!r}, file=sys.stderr)\n"
+    "raise SystemExit({exit_code})\n"
+)
+
+
 def fake_binary(tmp_path, *, exit_code=0, stderr=""):
+    """A stand-in for the Rust binary that reports what it was called with.
+
+    On POSIX a shebang script is enough. On Windows ``subprocess`` cannot
+    execute shebang scripts at all, so the same payload is written as a
+    ``.py`` file and a ``.cmd`` shim invokes it with the current interpreter.
+    Either way the facade under test receives one executable path.
+    """
+    payload = FAKE_PAYLOAD.format(stderr=stderr, exit_code=exit_code)
+    if os.name == "nt":
+        script = tmp_path / "pmc_fake_payload.py"
+        script.write_text(payload, encoding="utf-8")
+        path = tmp_path / "pmc.cmd"
+        path.write_text(
+            '@echo off\r\n'
+            f'"{sys.executable}" "{script}" %*\r\n'
+            "exit /b %ERRORLEVEL%\r\n",
+            encoding="utf-8",
+        )
+        return path
     path = tmp_path / "pmc"
-    path.write_text(
-        f"#!{sys.executable}\n"
-        "import json, sys\n"
-        "print(json.dumps({'argv': sys.argv[1:]}))\n"
-        f"if {stderr!r}:\n"
-        f"    print({stderr!r}, file=sys.stderr)\n"
-        f"raise SystemExit({exit_code})\n",
-        encoding="utf-8",
-    )
+    path.write_text(f"#!{sys.executable}\n{payload}", encoding="utf-8")
     path.chmod(0o755)
     return path
 

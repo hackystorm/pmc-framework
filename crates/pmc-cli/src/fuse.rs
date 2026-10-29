@@ -1866,7 +1866,13 @@ fn ensure_parent_dir(path: &Path, flag: &str) -> Result<(), String> {
 }
 
 fn sync_file(path: &Path) -> Result<(), String> {
-    let file = File::open(path)
+    // Windows: FlushFileBuffers requires a handle with write access, so a
+    // read-only open succeeds everywhere and then fails at sync_all with
+    // ERROR_ACCESS_DENIED (os error 5). Open read-write instead.
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
         .map_err(|error| format!("open {} for sync: {error}", path.display()))?;
     file.sync_all()
         .map_err(|error| format!("sync {}: {error}", path.display()))

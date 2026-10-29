@@ -371,9 +371,13 @@ def _resolve_pmc_cli(explicit: str | None) -> str:
     repository = Path(__file__).resolve().parents[2]
     for candidate in (
         repository / "crates" / "target" / "release" / "pmc",
+        repository / "crates" / "target" / "release" / "pmc.exe",
         repository / "crates" / "target" / "debug" / "pmc",
+        repository / "crates" / "target" / "debug" / "pmc.exe",
         repository / "target" / "release" / "pmc",
+        repository / "target" / "release" / "pmc.exe",
         repository / "target" / "debug" / "pmc",
+        repository / "target" / "debug" / "pmc.exe",
     ):
         if candidate.is_file():
             return str(candidate)

@@ -8,6 +8,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**The roadmap to v1.0 and the orchestrator prompt** (`docs/roadmap.md`, `docs/orchestrator_prompt.md`)
+
+- `docs/roadmap.md` states the stable-release criteria R1-R7 and milestones
+  M0-M7, each with an objective, a method, a pre-registered gate and the
+  evidence level it targets: Windows portability, the text training path
+  (`pmc-token`), the dataset-parsing module, real consolidation, the
+  cross-host state v5, the self-improvement loop (SPIN/T-SPIN, hint-delta,
+  ReVISE/TRT, an R-Zero-style curriculum, confidence weighting, cross-agent
+  critique), the BYOK provider layer and tool surface, and the release.
+- `docs/orchestrator_prompt.md` is the session prompt: prime directives
+  (evidence levels, D-17, the self-report cap, no self-generated positive
+  training data), roles with exclusive file ownership, the loop, and the
+  session-report contract.
+
+### Fixed
+
+**The suite runs on Windows** (`tests/test_cli_fuse.py`, `tests/test_dream.py`, `src/pmc/cli.py`, `crates/pmc-cli/src/fuse.rs`, `scripts/publish_checks.py`, `.github/workflows/ci.yml`)
+
+- The first Windows run found six failures; all were platform defects, none
+  logic errors. The `pmc fuse` fake binary was a POSIX shebang script, which
+  `subprocess` cannot execute on Windows; it is now a `.cmd` shim over the
+  same payload there and a shebang script elsewhere. The two symlink
+  rejections are skipped with a recorded reason where the OS cannot create
+  symlinks unprivileged (WinError 1314); where it can, the tests run whole.
+  `_resolve_pmc_cli` now also finds `pmc.exe`. `sync_file` opened the staged
+  file read-only, and Windows `FlushFileBuffers` needs write access, so the
+  fusion test failed with `Access denied (os error 5)`; it opens read-write
+  now. The publish check compared its exempt-file set against the platform
+  separator, so on Windows the `test_companion.py` exemption never matched;
+  relative paths are POSIX-normalized now.
+- Measured after the fixes, Windows: `pytest` 385 passed, 2 skipped, exit 0;
+  `cargo test` all results ok, exit 0; publish checks all five ok; a second
+  consecutive run repeated both suites green. The CI matrix now runs the
+  Python suite on ubuntu and windows with Python 3.11-3.13 and the Rust
+  suite on ubuntu and windows.
+
+### Added
+
 **The hidden-state channel, measured on real hidden states** (`src/pmc/state_channel.py`, `bench/hidden_channel.py`, `tests/`, `docs/claims.md`)
 
 - `HiddenSource` turns a hidden vector into one bounded token made of four

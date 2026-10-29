@@ -261,7 +261,10 @@ class CheckpointTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
             checkpoint = make_checkpoint(root)
-            (checkpoint / "link.bin").symlink_to(checkpoint / "checkpoint.bin")
+            try:
+                (checkpoint / "link.bin").symlink_to(checkpoint / "checkpoint.bin")
+            except OSError as error:
+                self.skipTest(f"symlink creation requires privilege here: {error}")
             with self.assertRaises(CheckpointError):
                 checkpoint_digest(checkpoint)
 
@@ -269,7 +272,10 @@ class CheckpointTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
             checkpoint = make_checkpoint(root)
-            (checkpoint / "link.bin").symlink_to(checkpoint / "checkpoint.bin")
+            try:
+                (checkpoint / "link.bin").symlink_to(checkpoint / "checkpoint.bin")
+            except OSError as error:
+                self.skipTest(f"symlink creation requires privilege here: {error}")
             with self.assertRaises(CheckpointError):
                 copy_checkpoint(checkpoint, root / "copy")
             self.assertFalse((root / "copy").exists())

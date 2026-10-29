@@ -188,7 +188,13 @@ def iter_files() -> list[Path]:
 
 
 def relative(path: Path) -> str:
-    return str(path.relative_to(REPO_ROOT))
+    """The path relative to the repository root, with POSIX separators.
+
+    The exempt-file sets are written with forward slashes, so the
+    comparison must not depend on the platform's separator: on Windows the
+    default separator is a backslash and the exemption would never match.
+    """
+    return path.relative_to(REPO_ROOT).as_posix()
 
 
 def check_english(files: list[Path]) -> list[str]:
