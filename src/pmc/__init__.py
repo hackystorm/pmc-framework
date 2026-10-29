@@ -13,4 +13,10 @@ See ``docs/architecture.md`` for the full contract.
 
 __version__ = "0.1.0"
 
-__all__ = ["__version__"]
+from .reference_transformer import (
+    ReferenceTransformer,
+    ReferenceTransformerConfig,
+    random_embedding_table,
+)
+
+__all__ = ["__version__", "ReferenceTransformer", "ReferenceTransformerConfig", "random_embedding_table"]
