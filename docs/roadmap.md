@@ -274,6 +274,13 @@ cost and propagated taint.
 journals; tainted external content blocks the dream gate; the tool loop
 passes against the live server. **Evidence:** E2.
 
+**Status (2026-10-29):** real consolidation on multiple memories (E2). The
+consolidator fetched 3 memories' content and trained on the concatenation.
+recall_newer 0.002783 -> 0.000086, gate refused (bound 0.003783). Negative
+recorded in docs/lab.md. The mechanism works end to end with multiple
+memories. A consolidator that improves recall_newer needs a different
+strategy (structure, larger corpus).
+
 **Status (2026-10-29):** real consolidation on content (E2). `dream_consolidator_content.py`
 fetches memory content from the private store (D-17 preserved), tokenises it as
 UTF-8 bytes, and fine-tunes the baseline. The dream ran end to end: recall_newer

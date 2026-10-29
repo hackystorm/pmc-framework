@@ -707,6 +707,48 @@ consolidation strategy (one short memory, no generalisation), not to the
 mechanism. The mechanism - content fetch, tokenisation, fine-tuning,
 checkpoint write, held-out scoring, gate, rollback - works end to end.
 
+## Dream real consolidation on multiple memories (M3, 2026-10-29)
+
+Pre-registration: a decoder-only transformer checkpoint is consolidated with a
+trainer that fetches all replayed memories' content from the private store,
+tokenises it as UTF-8 bytes, and fine-tunes the baseline on the
+concatenation. The held-out metric is loss-derived on a fixed token
+sequence. The gate requires recall_newer to improve by at least
+newer_gain_min (0.001).
+
+Command:
+```
+pmc dream --workspace <workspace> --checkpoint <checkpoint> \\
+  --trainer "python bench/dream_consolidator_content.py" \\
+  --evaluator "<path>/dream_evaluate.exe" --limit 8 --seed 20261027
+```
+
+Raw numbers (one run, 2026-10-29):
+- record_ids: 3 records (mem_3518b58cd9394c7c, mem_23b5a226d9d59bd4,
+  mem_c1d94718777e5992)
+- content: 3 short memories (~90 bytes total)
+- metrics_before: recall_newer 0.002783, recall_older 0.002783,
+  interference 0.0, calibration 0.0, identity 1.0, false_memory 0.0
+- metrics_after: recall_newer 0.000086, recall_older 0.000086,
+  interference 0.0, calibration 0.0, identity 1.0, false_memory 0.0
+- gate: passed false; reasons: ["recall_newer"]
+  (recall_newer: before 0.002783, after 0.000086, bound 0.003783, delta -0.002697)
+- outcome: rolled_back
+- reason: the gate failed
+- checkpoint before/after digest: identical (rollback byte-identical)
+
+Interpretation (E2: integration with a real workspace, sidecar, private store,
+checkpoint and CLI path): the consolidator fetches all replayed memories'
+content (D-17 preserved) and trains on the concatenation. The held-out
+metric got substantially worse: training on three short memories did not
+improve the held-out loss; it made it worse. The gate correctly refused it.
+The negative is specific to the data (three short, unrelated memories; no
+generalisation) and the consolidation strategy (concatenation without
+structure), not to the mechanism. The mechanism - fetch, tokenisation,
+fine-tuning, checkpoint write, held-out scoring, gate, rollback - works end
+to end with multiple memories. A consolidator that improves recall_newer
+needs a different strategy (e.g., replay with structure, or a real corpus).
+
 ## The loop
 
 ```
