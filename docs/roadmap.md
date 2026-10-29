@@ -274,6 +274,14 @@ cost and propagated taint.
 journals; tainted external content blocks the dream gate; the tool loop
 passes against the live server. **Evidence:** E2.
 
+**Status (2026-10-29):** M5a scaffolding delivered. `ops::dpo_loss` (3 tests)
+plus `train_spin` example: DPO training on 8 synthetic preference pairs,
+DPO loss 0.693147 to 0.000219 (memorised), held-out preference accuracy
+0.250 unchanged. Gate not met - recorded as a negative in docs/lab.md. The
+DPO mechanism is in place and measured; preference pairs real, a generator
+and a held-out capability battery remain. M5b-M5f (Hint-delta, ReVISE/TRT,
+R-Zero, COSE, CoNL) remain.
+
 **Status (2026-10-29):** real consolidation run (E2). `dream_consolidate` and
 `dream_evaluate` (Rust examples) implement a real consolidator (fine-tune on
 record-derived tokens, load baseline checkpoint, write candidate) and a real

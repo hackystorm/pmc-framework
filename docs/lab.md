@@ -637,6 +637,37 @@ strategy, not to the mechanism. A real consolidation that improves
 recall_newer needs a consolidator that trains on the replayed memory
 content (fetched from the private store) and a pre-registered margin.
 
+## SPIN (M5a, 2026-10-29)
+
+Pre-registration: a tiny transformer is trained with DPO on 8 preference
+pairs (chosen = fixed sequence, rejected = the same sequence with one token
+changed) and evaluated on 8 held-out pairs. The gate requires the held-out
+preference accuracy to improve over the initial value.
+
+Command:
+```
+PMC_STEPS=10 PMC_LR=0.01 PMC_N_LAYER=2 PMC_D_MODEL=32 PMC_N_HEAD=4 \\
+  PMC_FFN=64 PMC_VOCAB=16 PMC_N_POS=16 PMC_RANK=8 PMC_PAIRS=8 \\
+  cargo run --offline --example train_spin
+```
+
+Raw numbers (one run, 2026-10-29):
+- pairs: 8, held_out: 8
+- initial_dpo_loss: 0.693147
+- final_dpo_loss: 0.000219 (memorised)
+- initial_preference_accuracy: 0.250
+- final_preference_accuracy: 0.250
+- beat (held-out improvement): false
+- elapsed_millis: 609
+
+Interpretation (E1: unit-level mechanism, synthetic data): the DPO
+mechanism works - the loss falls and the model memorises the training pairs
+- but the held-out preference accuracy does not improve. The gate is not
+met. The negative is the expected one for a tiny model on synthetic pairs:
+memorisation without generalisation. A real SPIN run needs a real model, a
+real generator (the model's own samples as rejected) and a held-out
+capability battery, plus a pre-registered margin.
+
 ## The loop
 
 ```

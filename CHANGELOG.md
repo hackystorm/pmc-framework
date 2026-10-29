@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**M5a: SPIN scaffolding** (`crates/pmc-train/src/ops.rs`, `crates/pmc-train/examples/train_spin.rs`)
+
+- DPO loss in ops.rs (3 tests) plus train_spin example: DPO training on 8
+  synthetic preference pairs, DPO loss 0.693147 to 0.000219 (memorised),
+  held-out preference accuracy 0.250 unchanged. Gate not met - recorded as
+  a negative in docs/lab.md. The DPO mechanism is in place and measured.
+
 **M6b: tool surface** (`src/pmc/runtime/tools.py`, `src/pmc/runtime/live_server.py`)
 
 - Declared tool registry (memory.remember, memory.restore, state.read,
