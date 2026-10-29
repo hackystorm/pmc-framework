@@ -129,10 +129,27 @@ def copy_consolidator(_baseline: Path, _candidate: Path, _manifest: Path) -> Non
 
 
 def command_consolidator(argv: Sequence[str]) -> Consolidator:
-    """Run an external trainer with ``baseline candidate replay_manifest``."""
+    """Run an external trainer with ``baseline candidate replay_manifest``.
+
+    If the command starts with ``cargo run`` it is rewritten to invoke the
+    release binary directly, avoiding cached debug builds.
+    """
     command = [str(part) for part in argv]
     if not command:
         raise DreamError("the consolidator command is empty")
+    # Rewrite ``cargo run --release --offline --example NAME`` to the
+    # release binary path to avoid cached debug builds.
+    if (len(command) >= 5 and command[0] == "cargo" and command[1] == "run" and
+            "--release" in command and "--offline" in command and "--example" in command):
+        try:
+            ex_idx = command.index("--example")
+            example_name = command[ex_idx + 1]
+            repo_root = Path(__file__).resolve().parents[1]
+            release_binary = repo_root / "crates" / "target" / "release" / "examples" / f"{example_name}.exe"
+            if release_binary.is_file():
+                command = [str(release_binary)]
+        except Exception:
+            pass
 
     def run(baseline: Path, candidate: Path, manifest: Path) -> None:
         result = subprocess.run(
