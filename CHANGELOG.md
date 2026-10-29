@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**M2: dataset parsing module** (`src/pmc/data/ingest.py`)
+
+- Readers for CSV, TXT and Markdown (JSONL already in corpus.py), dedup by
+  content digest, declared quality filters, and `admit_corpus` under
+  `ProvenanceKind.EXTERNAL` with content never in the ledger. Taint
+  propagation exercised via `TaintLedger`. Measured: 12 tests pass, exit 0;
+  full suite 411 passed, 8 skipped, exit 0.
+
 **M1 gate met on a real corpus** (`crates/pmc-train/examples/train_lm.rs`, `docs/lab.md`)
 
 - First positive on real text: held-out perplexity 261.48 to 94.47 on the first

@@ -176,6 +176,14 @@ ledger, with content never in the ledger.
 duplicated and a poisoned record is detected by digest; an extended
 ledger-holds-no-content test. **Evidence:** E2.
 
+**Status (2026-10-29):** delivered. `src/pmc/data/ingest.py` adds readers for
+CSV, TXT and Markdown (JSONL already in corpus.py), dedup by content digest,
+declared quality filters, and `admit_corpus` under `ProvenanceKind.EXTERNAL`
+with content never in the ledger. Taint propagation is exercised by marking
+an admitted digest in a `TaintLedger`. Measured: `pytest tests/test_ingest.py`
+12 passed, exit 0; full suite 411 passed, 8 skipped, exit 0. M2 gate met at
+E2 for the ingest path.
+
 ### M3 — Real consolidation (needs M1, M2)
 
 **Objective.** The dream pipeline runs with a real consolidator and real
