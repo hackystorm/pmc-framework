@@ -274,6 +274,14 @@ cost and propagated taint.
 journals; tainted external content blocks the dream gate; the tool loop
 passes against the live server. **Evidence:** E2.
 
+**Status (2026-10-29):** real consolidation on content (E2). `dream_consolidator_content.py`
+fetches memory content from the private store (D-17 preserved), tokenises it as
+UTF-8 bytes, and fine-tunes the baseline. The dream ran end to end: recall_newer
+0.002783 -> 0.000766, gate refused (bound 0.003783). Negative recorded in
+docs/lab.md. The mechanism works end to end; the consolidation strategy (one
+short memory) did not improve the held-out metric. A consolidator that trains
+on multiple memories with a pre-registered margin remains.
+
 **Status (2026-10-29):** M5a scaffolding delivered. `ops::dpo_loss` (3 tests)
 plus `train_spin` example: DPO training on 8 synthetic preference pairs,
 DPO loss 0.693147 to 0.000219 (memorised), held-out preference accuracy

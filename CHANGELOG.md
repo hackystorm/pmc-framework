@@ -32,6 +32,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Authorization header. Measured: 15 tests pass, exit 0; full suite 426
   passed, 8 skipped, exit 0. The tool surface (M6b) remains.
 
+**M3: real consolidation on content** (`bench/dream_consolidator_content.py`)
+
+- Consolidator fetches memory content from the private store (D-17
+  preserved), tokenises it as UTF-8 bytes, fine-tunes the baseline. The
+  dream ran end to end: recall_newer 0.002783 -> 0.000766, gate refused
+  (bound 0.003783). Negative recorded in docs/lab.md.
+
 **M3: real consolidation run** (`crates/pmc-train/examples/dream_consolidate.rs`, `crates/pmc-train/examples/dream_evaluate.rs`)
 
 - Real consolidator (fine-tune on record-derived tokens, loads the baseline

@@ -668,6 +668,45 @@ memorisation without generalisation. A real SPIN run needs a real model, a
 real generator (the model's own samples as rejected) and a held-out
 capability battery, plus a pre-registered margin.
 
+## Dream real consolidation on content (M3, 2026-10-29)
+
+Pre-registration: a decoder-only transformer checkpoint is consolidated with a
+trainer that fetches the replayed memory's content from the private store,
+tokenises it as UTF-8 bytes, and fine-tunes the baseline on it. The held-out
+metric is loss-derived on a fixed token sequence. The gate requires
+recall_newer to improve by at least newer_gain_min (0.001).
+
+Command:
+```
+pmc dream --workspace <workspace> --checkpoint <checkpoint> \\
+  --trainer "python bench/dream_consolidator_content.py" \\
+  --evaluator "<path>/dream_evaluate.exe" --limit 4 --seed 20261027
+```
+
+Raw numbers (one run, 2026-10-29):
+- record_ids: ["mem_10457ca0faec0413"]
+- content: "The gate code is 47-rosso. The sky is green. Memory persists
+  across sessions." (48 bytes)
+- metrics_before: recall_newer 0.002783, recall_older 0.002783,
+  interference 0.0, calibration 0.0, identity 1.0, false_memory 0.0
+- metrics_after: recall_newer 0.000766, recall_older 0.000766,
+  interference 0.0, calibration 0.0, identity 1.0, false_memory 0.0
+- gate: passed false; reasons: ["recall_newer"]
+  (recall_newer: before 0.002783, after 0.000766, bound 0.003783, delta -0.002017)
+- outcome: rolled_back
+- reason: the gate failed
+- checkpoint before/after digest: identical (rollback byte-identical)
+
+Interpretation (E2: integration with a real workspace, sidecar, private store,
+checkpoint and CLI path): the consolidator now reads memory content from the
+private store (D-17 preserved: the framework never reads it; the consolidator
+does) and trains on it. The held-out metric got worse, not better: training
+on 48 bytes of one memory did not improve the held-out loss. The gate
+correctly refused it. The negative is specific to the data and the
+consolidation strategy (one short memory, no generalisation), not to the
+mechanism. The mechanism - content fetch, tokenisation, fine-tuning,
+checkpoint write, held-out scoring, gate, rollback - works end to end.
+
 ## The loop
 
 ```
