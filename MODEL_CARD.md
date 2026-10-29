@@ -18,6 +18,25 @@
 | Code licence | GPL-3.0-only (the repository) |
 | Training data | To be confirmed at release; the provenance manifest is part of the release |
 
+## Measured results (as of 2026-10-29)
+
+No weights are published, but the following has been measured and is
+reproducible from the repository:
+
+| Measurement | Value | Level | Command |
+|---|---|---|---|
+| Text training path (Alice, 512 chars, char-level) | perplexity 261.48 → 94.47 | E3 | `PMC_TOKENS=... cargo run --release --example train_lm` |
+| Consolidation (single memory, content) | recall_newer 0.002783 → 0.000766 | E2 | `pmc dream ...` (rolled back) |
+| Consolidation (3 memories, content) | recall_newer 0.002783 → 0.000086 | E2 | `pmc dream ...` (rolled back) |
+| DPO training (tiny model) | loss 0.693 → 0.00194 | E1 | `cargo run --example train_dpo` |
+| SPIN held-out preference | 0.250 (no improvement) | E1 | `cargo run --example train_spin` |
+| Cross-host gate (v4) | 11/30 (floor 15) | E3 | `bench/crosshost_cv.py` |
+| Substrate Swap (PMC-mini, v1/v2/v3) | host B 1/8, 0/8, 2/8 | E3 | `bench/substrate_swap.py` |
+| Tokenizer (pmc-token, LFM2.5) | roundtrip pass | E2 | `PMC_TEST_GGUF=... cargo test -p pmc-token` |
+
+Negative results are published with the same care as positives. See
+[`docs/lab.md`](docs/lab.md) and [`docs/claims.md`](docs/claims.md).
+
 ## What it is
 
 A checkpoint produced by the PMC trainer, with memory consolidated into the
