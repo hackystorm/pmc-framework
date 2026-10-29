@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**The corpus module** (`src/pmc/data/`)
+
+- Second M1 work package: `CorpusRecord` with validated id/text/split, per-record
+  and whole-corpus SHA-256 digests (order-independent), JSONL parse/write,
+  deterministic seed-based sharding that does not depend on input order, split
+  grouping, and tokenization through an injected encoder. Measured: 20 tests
+  pass, exit 0; full suite 399 passed, 8 skipped, exit 0.
+
 **The `pmc-token` crate** (`crates/pmc-token/`)
 
 - The first M1 work package: byte-level BPE over GGUF tokenizer metadata,

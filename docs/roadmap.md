@@ -122,8 +122,18 @@ cases, rank-ordered merges, special-token splitting (earliest then longest),
 and `decode_bytes`/`decode_string` that refuse invalid UTF-8. Measured:
 `cargo test -p pmc-token` 13 passed, 0 failed, exit 0, including a
 metadata-only GGUF roundtrip and an env-gated real-model roundtrip
-(`PMC_TEST_GGUF`). Remaining M1 work: the corpus format and sharding, then
-the next-token loss in `pmc-train`.
+(`PMC_TEST_GGUF`). Remaining M1 work at that point: the corpus format and
+sharding, then the next-token loss in `pmc-train`.
+
+**Status (2026-10-29):** second work package delivered - `src/pmc/data/`
+corpus module: `CorpusRecord` (validated id/text/split), per-record and
+whole-corpus SHA-256 digests (order-independent), JSONL parse/write,
+deterministic seed-based sharding that does not depend on input order,
+split grouping, and injected tokenization. Measured: `pytest
+tests/test_corpus.py` 20 passed, exit 0; full suite 399 passed, 8 skipped
+(2 symlink, 6 parity without cargo on PATH; parity 6 passed with cargo),
+exit 0. Remaining M1 work: the next-token loss on real token ids in
+`pmc-train` (`transformer.rs`), then the M1 gate (held-out perplexity).
 
 
 ### M2 — Dataset parsing module (needs M1)
