@@ -274,6 +274,16 @@ cost and propagated taint.
 journals; tainted external content blocks the dream gate; the tool loop
 passes against the live server. **Evidence:** E2.
 
+**Status (2026-10-29):** first sub-package delivered (M6a). `src/pmc/runtime/providers.py`
+adds `Provider` (keys read from the environment only, never from files),
+`ProviderRegistry` (JSON file loader), `ResourceBudget` (declared
+`network_requests_per_day` with persistence and refusal), and `ExternalCall`
+(budget + resource event + taint mark). `ChatClient` gained an `api_key`
+parameter that emits an `Authorization: Bearer` header. Measured:
+`pytest tests/test_providers.py` 15 passed, exit 0; full suite 426 passed,
+8 skipped, exit 0. The tool surface (`tools` on `/v1/chat/completions` and
+the declared tool registry) remains as M6b.
+
 ### M7 — Packaging and release (needs M0-M6)
 
 **Objective.** v1.0.0 tagged and reproducible from a fresh clone.

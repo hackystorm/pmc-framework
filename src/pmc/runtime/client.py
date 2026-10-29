@@ -47,6 +47,7 @@ class ChatClient:
         timeout: float = 180.0,
         temperature: float = 0.0,
         max_tokens: int = 256,
+        api_key: str | None = None,
         extra_body: dict[str, Any] | None = None,
     ) -> None:
         self.endpoint = endpoint.rstrip("/")
@@ -54,6 +55,7 @@ class ChatClient:
         self.timeout = timeout
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.api_key = api_key.strip() if api_key else None
         self.extra_body = dict(extra_body or {})
 
     # -- internals ---------------------------------------------------------
@@ -82,10 +84,13 @@ class ChatClient:
         }
         body.update(self.extra_body)
 
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         request = urllib.request.Request(
             self._url("/chat/completions"),
             data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         try:
@@ -101,7 +106,10 @@ class ChatClient:
 
     def models(self) -> list[str]:
         """List the model names the endpoint advertises."""
-        request = urllib.request.Request(self._url("/models"), method="GET")
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        request = urllib.request.Request(self._url("/models"), method="GET", headers=headers)
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))

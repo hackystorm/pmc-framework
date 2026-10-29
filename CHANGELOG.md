@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**M6a: BYOK provider layer** (`src/pmc/runtime/providers.py`)
+
+- Provider registry (JSON file, keys from environment only), ResourceBudget
+  with persistence and refusal, ExternalCall with budget + resource event +
+  taint mark. ChatClient gained an api_key parameter emitting an
+  Authorization header. Measured: 15 tests pass, exit 0; full suite 426
+  passed, 8 skipped, exit 0. The tool surface (M6b) remains.
+
 **M3: dream CLI path** (`bench/dream_consolidator.py`, `bench/dream_evaluator.py`)
 
 - End-to-end `pmc dream` run with an identity consolidator and a mechanics
