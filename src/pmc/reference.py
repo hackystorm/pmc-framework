@@ -28,8 +28,32 @@ __all__ = [
     "ReferenceConfig",
     "ReferenceReport",
     "ReferenceTrainer",
+    "dpo_loss",
     "f32",
 ]
+
+
+def dpo_loss(
+    logp_chosen: float,
+    logp_rejected: float,
+    logp_ref_chosen: float,
+    logp_ref_rejected: float,
+    beta: float,
+) -> float:
+    """Direct Preference Optimisation loss for one preference pair.
+
+    Python reference of ``pmc_train::ops::dpo_loss``. The Rust version
+    evaluates in ``f32``; this one rounds to ``f32`` after each operation so
+    the two stay within the published tolerance. The two agree within
+    ``1e-3`` on the published cases.
+    """
+    delta = f32(f32(logp_chosen - logp_rejected) - f32(logp_ref_chosen - logp_ref_rejected))
+    x = f32(beta * delta)
+    if x >= 20.0:
+        return 0.0
+    if x <= -20.0:
+        return f32(-x)
+    return f32(math.log(1.0 + math.exp(-x)))
 
 
 def f32(value: float) -> float:
