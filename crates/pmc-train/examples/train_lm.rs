@@ -14,15 +14,17 @@
 //! Run it with:
 //!
 //! ```text
-//! PMC_TOKENS=/path/to/tokens.txt \
+//! PMC_TRAIN_TOKENS=/path/to/train_tokens.txt \
+//! PMC_VAL_TOKENS=/path/to/val_tokens.txt \
 //! PMC_CHECKPOINT=/path/to/checkpoint \
 //!   cargo run --release --offline --example train_lm
 //! ```
 //!
-//! `PMC_TOKENS` may point at a file with one integer per line or at a JSON
+//! `PMC_TRAIN_TOKENS` may point at a file with one integer per line or at a JSON
 //! array of integers. If it is unset, a deterministic pseudo sequence is
 //! used so the example runs without external data; the report records its
-//! SHA-256 either way. `PMC_EVAL_TOKENS` overrides the held-out suffix.
+//! SHA-256 either way. `PMC_VAL_TOKENS` overrides the held-out evaluation set.
+//! If `PMC_EARLY_STOPPING=1`, early stopping is enabled with `PMC_PATIENCE`.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -146,30 +148,111 @@ fn main() {
     };
     config.validate().expect("the configuration must be valid");
 
-    // Tokens: from a file, or a deterministic pseudo sequence so the
-    // example runs without external data. The held-out suffix is kept out
-    // of training and scored before and after.
-    let (all_tokens, source) = match std::env::var("PMC_TOKENS") {
-        Ok(path) => (read_tokens(&path), path),
-        Err(_) => {
+    let (train_tokens, eval_tokens, source) = {
+        // New interface: PMC_TRAIN_TOKENS + optional PMC_VAL_TOKENS
+        if let Ok(train_path) = std::env::var("PMC_TRAIN_TOKENS") {
+            let train_tokens = read_tokens(&train_path);
+            let (val_tokens, holdout_tokens) = match std::env::var("PMC_VAL_TOKENS") {
+                Ok(path) => (read_tokens(&path), Vec::new()),
+                Err(_) => {
+                    // Use holdout suffix from train_tokens
+                    let split = train_tokens.len().saturating_sub(holdout);
+                    (train_tokens[..split].to_vec(), train_tokens[split..].to_vec())
+                }
+            };
+            let eval_tokens = val_tokens;
+            let source = std::env::var("PMC_TRAIN_TOKENS").unwrap();
+            (train_tokens, eval_tokens, source)
+        } else if let Ok(token_path) = std::env::var("PMC_TOKENS") {
+            // Backward compatibility with PMC_TOKENS
+            let tokens = read_tokens(&token_path);
+            let source = token_path;
+            let split = tokens.len().saturating_sub(holdout);
+            let train_tokens = tokens[..split].to_vec();
+            let eval_tokens = match std::env::var("PMC_EVAL_TOKENS") {
+                Ok(path) => read_tokens(&path),
+                Err(_) => tokens[split..].to_vec(),
+            };
+            (train_tokens, eval_tokens, source)
+        } else {
+            // Pseudo tokens
             let tokens: Vec<u32> = (0..64).map(|i| ((i * 37 + 11) % vocab) as u32).collect();
-            (tokens, String::from("<pseudo>"))
+            let split = tokens.len().saturating_sub(holdout);
+            let train_tokens = tokens[..split].to_vec();
+            let eval_tokens = tokens[split..].to_vec();
+            (train_tokens, eval_tokens, String::from("<pseudo>"))
         }
     };
-    assert!(
-        all_tokens.len() > holdout + 2,
-        "need more tokens than the held-out suffix"
-    );
-    let split = all_tokens.len() - holdout;
-    let (train_tokens, eval_tokens) = if let Ok(path) = std::env::var("PMC_EVAL_TOKENS") {
-        (all_tokens.clone(), read_tokens(&path))
-    } else {
-        (all_tokens[..split].to_vec(), all_tokens[split..].to_vec())
-    };
+
     let train_bytes: Vec<u8> = train_tokens.iter().flat_map(|t| t.to_le_bytes()).collect();
     let eval_bytes: Vec<u8> = eval_tokens.iter().flat_map(|t| t.to_le_bytes()).collect();
     let train_sha = sha256_hex(&train_bytes);
     let eval_sha = sha256_hex(&eval_bytes);
+
+    let config = TransformerConfig {
+        n_layer,
+        d_model,
+        n_head,
+        ffn_hidden,
+        vocab,
+        n_positions,
+        readout_rank,
+    };
+    config.validate().expect("the configuration must be valid");
+
+    let (train_tokens, eval_tokens, source) = {
+        // New interface: PMC_TRAIN_TOKENS + optional PMC_VAL_TOKENS
+        if let Ok(train_path) = std::env::var("PMC_TRAIN_TOKENS") {
+            let train_tokens = read_tokens(&train_path);
+            let (val_tokens, holdout_tokens) = match std::env::var("PMC_VAL_TOKENS") {
+                Ok(path) => (read_tokens(&path), Vec::new()),
+                Err(_) => {
+                    // Use holdout suffix from train_tokens
+                    let split = train_tokens.len().saturating_sub(holdout);
+                    (train_tokens[..split].to_vec(), train_tokens[split..].to_vec())
+                }
+            };
+            let eval_tokens = val_tokens;
+            let source = std::env::var("PMC_TRAIN_TOKENS").unwrap();
+            (train_tokens, eval_tokens, source)
+        } else if let Ok(token_path) = std::env::var("PMC_TOKENS") {
+            // Backward compatibility with PMC_TOKENS
+            let tokens = read_tokens(&token_path);
+            let source = token_path;
+            let split = tokens.len().saturating_sub(holdout);
+            let train_tokens = tokens[..split].to_vec();
+            let eval_tokens = match std::env::var("PMC_EVAL_TOKENS") {
+                Ok(path) => read_tokens(&path),
+                Err(_) => tokens[split..].to_vec(),
+            };
+            (train_tokens, eval_tokens, source)
+        } else {
+            // Pseudo tokens
+            let tokens: Vec<u32> = (0..64).map(|i| ((i * 37 + 11) % vocab) as u32).collect();
+            let split = tokens.len().saturating_sub(holdout);
+            let train_tokens = tokens[..split].to_vec();
+            let eval_tokens = tokens[split..].to_vec();
+            (train_tokens, eval_tokens, String::from("<pseudo>"))
+        }
+    };
+
+    let train_bytes: Vec<u8> = train_tokens.iter().flat_map(|t| t.to_le_bytes()).collect();
+    let eval_bytes: Vec<u8> = eval_tokens.iter().flat_map(|t| t.to_le_bytes()).collect();
+    let train_sha = sha256_hex(&train_bytes);
+    let eval_sha = sha256_hex(&eval_bytes);
+
+    let config = TransformerConfig {
+        n_layer,
+        d_model,
+        n_head,
+        ffn_hidden,
+        vocab,
+        n_positions,
+        readout_rank,
+    };
+    config.validate().expect("the configuration must be valid");
+
+    let embedding = TableEmbedding::random(vocab, d_model, embedding_seed);
 
     let mut model = match std::env::var("PMC_BASELINE") {
         Ok(path) => checkpoint::load(std::path::Path::new(&path))
@@ -188,9 +271,19 @@ fn main() {
     let baseline_loss = baseline_forward.loss;
     let baseline_perplexity = baseline_loss.exp();
 
+    // Early stopping setup
+    let early_stopping = std::env::var("PMC_EARLY_STOPPING").ok().map(|v| v == "1").unwrap_or(false);
+    let patience = env_usize("PMC_PATIENCE", 3);
+    let mut best_eval_loss = f32::INFINITY;
+    let mut patience_counter = 0;
+    let mut best_model_state: Option<Vec<f32>> = None;
+
     let mut initial_train_loss = 0.0f32;
     let mut final_train_loss = 0.0f32;
     let started = Instant::now();
+
+    let train_mask = vec![true; train_tokens.len()];
+    let eval_mask = vec![true; eval_tokens.len()];
 
     for step in 0..steps {
         let forward = model.forward(&train_tokens, &embedding, Some(&train_mask));
@@ -207,6 +300,34 @@ fn main() {
                 steps,
                 forward.loss
             );
+        }
+
+        // Early stopping check
+        if early_stopping && step > 0 && step % 5 == 0 {
+            let eval_forward = model.forward(&eval_tokens, &embedding, Some(&eval_mask));
+            let eval_loss = eval_forward.loss;
+            if eval_loss < best_eval_loss {
+                best_eval_loss = eval_loss;
+                patience_counter = 0;
+                // Save best model state (parameters)
+                best_model_state = Some(model.params().iter().flat_map(|p| p.iter().cloned()).collect());
+            } else {
+                patience_counter += 1;
+                if patience_counter >= patience {
+                    eprintln!("Early stopping at step {} (best eval loss: {:.6})", step + 1, best_eval_loss);
+                    // Restore best model
+                    if let Some(state) = best_model_state {
+                        let mut idx = 0;
+                        for param in model.params_mut() {
+                            for v in param.iter_mut() {
+                                *v = state[idx];
+                                idx += 1;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
         }
     }
 
