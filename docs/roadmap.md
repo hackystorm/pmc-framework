@@ -125,6 +125,16 @@ metadata-only GGUF roundtrip and an env-gated real-model roundtrip
 (`PMC_TEST_GGUF`). Remaining M1 work at that point: the corpus format and
 sharding, then the next-token loss in `pmc-train`.
 
+**Status (2026-10-29):** M1 gate MET on a real corpus. `crates/pmc-train/examples/train_lm.rs`
+trained on the first 512 characters of "Alice's Adventures in Wonderland"
+(Project Gutenberg #11, public domain), char-level tokenisation, 2 layers,
+22944 parameters, 20 steps: train loss 5.538515 to 2.778033, baseline eval
+loss 5.566339, final eval loss 4.548255, final perplexity 94.47 vs 261.48
+baseline, beat_baseline true. Raw numbers and command in docs/lab.md. The
+Rust/Python parity extension for the transformer remains. M1 is effectively
+complete at the mechanism + gate level; the parity extension is the last
+sub-gate.
+
 **Status (2026-10-29):** third work package delivered - `crates/pmc-train/examples/train_lm.rs`
 trains a decoder-only transformer on a token sequence with next-token prediction,
 holds out a suffix, scores it before and after, writes a checkpoint, and prints a

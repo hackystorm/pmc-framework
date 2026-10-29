@@ -514,6 +514,48 @@ margin; no post-hoc tuning of this run is permitted. The mechanism itself -
 next-token loss, checkpoint write, held-out scoring, reproducible command -
 is in place and measured.
 
+## LM text path: real corpus (M1, 2026-10-29)
+
+Pre-registration: a decoder-only transformer is trained on a token sequence
+with next-token prediction; a held-out suffix is scored before and after. The
+gate requires the final held-out loss to be below the random-init held-out
+loss. The held-out suffix is never seen during training. The corpus is the
+first 512 characters of "Alice's Adventures in Wonderland" (Project
+Gutenberg #11, public domain), encoded as UTF-8 bytes (char-level
+tokenization, vocab 256). No post-hoc tuning of the hyperparameters or the
+split is permitted; the split is the last 64 tokens.
+
+Command:
+```
+PMC_TOKENS=/tmp/.../alice_tokens.txt PMC_STEPS=20 PMC_LR=0.005 \\
+  PMC_N_LAYER=2 PMC_D_MODEL=32 PMC_N_HEAD=4 PMC_FFN=64 PMC_VOCAB=256 \\
+  PMC_N_POS=512 PMC_RANK=8 PMC_HOLDOUT=64 \\
+  cargo run --release --offline --example train_lm
+```
+
+Raw numbers (one run, 2026-10-29):
+- train_tokens: 452, eval_tokens: 64, holdout: 64
+- param_count: 22944
+- initial_train_loss: 5.538515
+- final_train_loss: 2.778033
+- baseline_eval_loss: 5.566339 (random init)
+- final_eval_loss: 4.548255
+- baseline_eval_perplexity: 261.48
+- final_eval_perplexity: 94.47
+- beat_baseline: true
+- train_sha256: b4a6d91c350e44f3c875de0eb7d06399b8962d2e5a0952ddcb8ad3087bd8020b
+- eval_sha256: 5ba0ba12cafe9112fc3d558992a364cda592bd642644cbb142c13013ab010f72
+- elapsed_millis: 676
+
+Interpretation (E3: measured against the random-init baseline, command and
+raw result retained): the text training path now beats the random-init
+baseline on a real corpus - held-out perplexity fell from 261.48 to 94.47
+(factor 2.77). The pseudo-sequence run did not (1746081.63), so this is
+the first positive on real text. The margin was not pre-registered as a
+number; this run establishes the measurement and the next attempt pre-registers
+a margin. The Python parity extension for the transformer remains (E1 for the
+trainer side until it lands).
+
 ## The loop
 
 ```

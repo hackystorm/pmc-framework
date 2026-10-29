@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Configuration of the measured M1 run on a real corpus (Alice in Wonderland,
+# Project Gutenberg #11, public domain). The example reads environment
+# variables; this file records the settings and the result.
+
+{
+  "name": "lm-trainer-alice",
+  "description": "M1 gate run on real text: char-level tokenisation of the first 512 characters of Alice in Wonderland.",
+  "seed": {
+    "model": 20261031,
+    "embedding": 20261032
+  },
+  "steps": 20,
+  "learning_rate": 0.005,
+  "holdout": 64,
+  "config": {
+    "n_layer": 2,
+    "d_model": 32,
+    "n_head": 4,
+    "ffn_hidden": 64,
+    "vocab": 256,
+    "n_positions": 512,
+    "readout_rank": 8
+  },
+  "param_count": 22944,
+  "task": {
+    "name": "next-token-prediction",
+    "corpus": "Alice's Adventures in Wonderland, Project Gutenberg #11, public domain",
+    "tokens": 516,
+    "train_tokens": 452,
+    "eval_tokens": 64,
+    "train_sha256": "b4a6d91c350e44f3c875de0eb7d06399b8962d2e5a0952ddcb8ad3087bd8020b",
+    "eval_sha256": "5ba0ba12cafe9112fc3d558992a364cda592bd642644cbb142c13013ab010f72",
+    "tokenization": "UTF-8 bytes (char-level, vocab 256)"
+  },
+  "result": {
+    "initial_train_loss": 5.538515,
+    "final_train_loss": 2.778033,
+    "baseline_eval_loss": 5.566339,
+    "final_eval_loss": 4.548255,
+    "baseline_eval_perplexity": 261.48,
+    "final_eval_perplexity": 94.47,
+    "beat_baseline": true
+  },
+  "gate": "M1 (pre-registered): final held-out loss below the random-init held-out loss. MET.",
+  "notes": [
+    "First positive on real text: held-out perplexity 261.48 -> 94.47.",
+    "The pseudo-sequence run (configs/lm_trainer.json) did not beat the baseline (1746081.63).",
+    "The margin was not pre-registered as a number; this run establishes the measurement."
+  ]
+}

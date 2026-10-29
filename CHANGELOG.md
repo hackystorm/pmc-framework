@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**M1 gate met on a real corpus** (`crates/pmc-train/examples/train_lm.rs`, `docs/lab.md`)
+
+- First positive on real text: held-out perplexity 261.48 to 94.47 on the first
+  512 characters of "Alice's Adventures in Wonderland" (Project Gutenberg #11,
+  public domain), char-level tokenisation, 2 layers, 22944 parameters, 20
+  steps. Train loss 5.538515 to 2.778033, baseline eval loss 5.566339, final
+  eval loss 4.548255, beat_baseline true. Raw numbers and the pre-registered
+  command are in docs/lab.md. The pseudo-sequence run did not beat the
+  baseline (1746081.63), so this is the first positive on real text. The
+  Rust/Python parity extension for the transformer remains.
+
 **The lm trainer** (`crates/pmc-train/examples/train_lm.rs`)
 
 - Third M1 work package: a decoder-only transformer trained on a token

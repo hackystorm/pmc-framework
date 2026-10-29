@@ -36,6 +36,13 @@ name = "pmc-gguf"
 version = "0.1.0"
 
 [[package]]
+name = "pmc-token"
+version = "0.1.0"
+dependencies = [
+ "pmc-gguf",
+]
+
+[[package]]
 name = "pmc-train"
 version = "0.1.0"
 dependencies = [
