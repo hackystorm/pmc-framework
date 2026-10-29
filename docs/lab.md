@@ -749,6 +749,37 @@ fine-tuning, checkpoint write, held-out scoring, gate, rollback - works end
 to end with multiple memories. A consolidator that improves recall_newer
 needs a different strategy (e.g., replay with structure, or a real corpus).
 
+## SPIN recursive loop (M5a, 2026-10-29)
+
+Pre-registration: a tiny transformer runs 4 iterations of self-play. Each
+iteration regenerates rejected samples from the current model, trains with
+DPO, and measures held-out preference accuracy. The gate requires the
+held-out accuracy to rise monotonically (an ever-rising curve).
+
+Command:
+```
+PMC_STEPS=3 PMC_ITERS=4 PMC_LR=0.01 PMC_PAIRS=8 \\
+  PMC_N_LAYER=2 PMC_D_MODEL=32 PMC_N_HEAD=4 PMC_FFN=64 PMC_VOCAB=16 \\
+  PMC_N_POS=16 PMC_RANK=8 cargo run --offline --example train_spin_loop
+```
+
+Raw numbers (one run, 2026-10-29):
+- pairs: 8, held_out: 8, iters: 4, steps_per_iter: 3
+- initial_acc (before training): 0.500
+- curve: [0.500, 0.625, 0.750, 0.250, 0.250]
+- final_acc: 0.250
+- beat (held-out improvement): false
+- elapsed_millis: 898
+
+Interpretation (E1: unit-level mechanism, synthetic data): the DPO
+mechanism works and the curve rises for two iterations (0.500 -> 0.750),
+then collapses (0.250). The ever-rising curve does NOT hold on this tiny
+model: recursive self-play improves initially, then degrades. This is a
+real negative for the "always rising" claim. The mechanism (generate
+rejected from current model, train with DPO, measure held-out) is in place
+and measured; the instability is a property of the model and the data, not
+of the loop.
+
 ## The loop
 
 ```

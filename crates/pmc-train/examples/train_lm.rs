@@ -172,7 +172,14 @@ fn main() {
     let eval_sha = sha256_hex(&eval_bytes);
 
     let embedding = TableEmbedding::random(vocab, d_model, embedding_seed);
-    let mut model = config.init(model_seed);
+    // Consolidation: when PMC_BASELINE points at a checkpoint, load it
+    // instead of re-initialising, so the dream fine-tunes the existing
+    // substrate rather than starting from scratch.
+    let mut model = match std::env::var("PMC_BASELINE") {
+        Ok(path) => checkpoint::load(std::path::Path::new(&path))
+            .expect("the baseline checkpoint must load"),
+        Err(_) => config.init(model_seed),
+    };
     let mut optimiser = TransformerAdam::new(&model);
     let train_mask = vec![true; train_tokens.len()];
     let eval_mask = vec![true; eval_tokens.len()];

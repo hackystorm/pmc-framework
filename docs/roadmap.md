@@ -297,6 +297,17 @@ DPO mechanism is in place and measured; preference pairs real, a generator
 and a held-out capability battery remain. M5b-M5f (Hint-delta, ReVISE/TRT,
 R-Zero, COSE, CoNL) remain.
 
+**Status (2026-10-29):** recursive SPIN loop delivered (negative).
+`train_spin_loop` regenerates rejected samples from the current model each
+iteration, trains with DPO, and reports the held-out accuracy curve:
+[0.500, 0.625, 0.750, 0.250, 0.250] over 4 iterations. The curve rises for
+two iterations then collapses, so the ever-rising claim does not hold on
+this tiny model. Recorded as a negative in docs/lab.md. The loop mechanism
+(generate from self, train, measure) is in place and measured; the
+instability is a property of the model and the data, not of the loop.
+`train_lm` also gained `PMC_BASELINE` support, so it can fine-tune an
+existing checkpoint instead of re-initialising.
+
 **Status (2026-10-29):** real consolidation run (E2). `dream_consolidate` and
 `dream_evaluate` (Rust examples) implement a real consolidator (fine-tune on
 record-derived tokens, load baseline checkpoint, write candidate) and a real

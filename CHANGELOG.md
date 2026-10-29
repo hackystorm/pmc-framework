@@ -15,6 +15,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   held-out preference accuracy 0.250 unchanged. Gate not met - recorded as
   a negative in docs/lab.md. The DPO mechanism is in place and measured.
 
+**M5a: recursive self-play loop** (`crates/pmc-train/examples/train_spin_loop.rs`)
+
+- Recursive SPIN loop: regenerates rejected samples from the current model
+  each iteration, trains with DPO, reports the held-out accuracy curve
+  [0.500, 0.625, 0.750, 0.250, 0.250]. The curve rises then collapses, so
+  the ever-rising claim does not hold. Negative recorded in docs/lab.md.
+  train_lm also gained PMC_BASELINE support (fine-tune an existing
+  checkpoint).
+
 **M6b: tool surface** (`src/pmc/runtime/tools.py`, `src/pmc/runtime/live_server.py`)
 
 - Declared tool registry (memory.remember, memory.restore, state.read,
