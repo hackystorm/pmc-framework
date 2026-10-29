@@ -56,12 +56,21 @@ class CorpusRecord:
             )
 
     def digest(self) -> str:
-        """SHA-256 of the canonical encoding of this record."""
+        """SHA-256 of the canonical encoding of this record (id, text, split)."""
         return hashlib.sha256(
             canonical_json({"id": self.id, "text": self.text, "split": self.split}).encode(
                 "utf-8"
             )
         ).hexdigest()
+
+    def content_digest(self) -> str:
+        """SHA-256 of the record's text alone.
+
+        This is the digest the dignity layer stores: it names the content
+        without naming the record, so two records that carry the same text
+        share a content digest even when their ids differ.
+        """
+        return hashlib.sha256(self.text.encode("utf-8")).hexdigest()
 
 
 def record_digest(record: CorpusRecord) -> str:
