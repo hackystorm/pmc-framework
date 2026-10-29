@@ -274,6 +274,16 @@ cost and propagated taint.
 journals; tainted external content blocks the dream gate; the tool loop
 passes against the live server. **Evidence:** E2.
 
+**Status (2026-10-29):** real consolidation run (E2). `dream_consolidate` and
+`dream_evaluate` (Rust examples) implement a real consolidator (fine-tune on
+record-derived tokens, load baseline checkpoint, write candidate) and a real
+evaluator (loss-derived metrics). The dream ran end to end and the gate
+refused it on recall_newer (0.002783 to 0.003275, bound 0.003783). Raw
+numbers in docs/lab.md. The shlex Windows-path bug in `_cmd_dream` was
+fixed in the same commit. M3 is now at E2 for the real consolidation path;
+the remaining work is a consolidator that trains on replayed memory content
+and a pre-registered margin.
+
 **Status (2026-10-29):** first sub-package delivered (M6a). `src/pmc/runtime/providers.py`
 adds `Provider` (keys read from the environment only, never from files),
 `ProviderRegistry` (JSON file loader), `ResourceBudget` (declared

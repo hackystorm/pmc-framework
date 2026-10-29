@@ -593,6 +593,50 @@ measurements. A real consolidation (training on replayed memory that
 improves recall_newer) and a real evaluator (measuring the six metrics on
 held-out memory) remain as the M3 follow-up.
 
+## Dream real consolidation (M3, 2026-10-29)
+
+Pre-registration: a decoder-only transformer checkpoint (2 layers, 22944
+parameters, trained on the first 512 characters of "Alice's Adventures in
+Wonderland") is consolidated with a trainer that fine-tunes on token
+sequences derived from the replayed record ids, and evaluated with a
+loss-derived metric on a held-out token sequence. The gate requires
+recall_newer to improve by at least newer_gain_min (0.001).
+
+Command:
+```
+PMC_STEPS=10 PMC_LR=0.01 PMC_N_LAYER=2 PMC_D_MODEL=32 PMC_N_HEAD=4 \\
+  PMC_FFN=64 PMC_VOCAB=256 PMC_N_POS=512 PMC_RANK=8 \\
+  PMC_EMBEDDING_SEED=20261032 \\
+  pmc dream --workspace <workspace> --checkpoint <baseline> \\
+    --trainer "<path>/dream_consolidate.exe" \\
+    --evaluator "<path>/dream_evaluate.exe" --limit 4 --seed 20261027
+```
+(Paths use forward slashes on Windows; see the shlex fix in `_cmd_dream`.)
+
+Raw numbers (one run, 2026-10-29):
+- record_ids: ["mem_001"]
+- train tokens derived from the record id: 16
+- held-out eval tokens: 64 (fixed seed 20261033)
+- metrics_before: recall_newer 0.002783, recall_older 0.002783,
+  interference 0.0, calibration 0.0, identity 1.0, false_memory 0.0
+- metrics_after: recall_newer 0.003275, recall_older 0.003275,
+  interference 0.0, calibration 0.0, identity 1.0, false_memory 0.0
+- gate: passed false; reasons: ["recall_newer"]
+  (recall_newer: before 0.002783, after 0.003275, bound 0.003783, delta 0.000492)
+- outcome: rolled_back
+- reason: the gate failed
+- checkpoint before/after digest: identical (rollback byte-identical)
+
+Interpretation (E2: integration with a real workspace, sidecar, checkpoint and
+CLI path; the metrics are loss-derived, not fabricated, but the consolidator
+trains on record-id-derived tokens, not on memory content): the real
+consolidation path works end to end and the gate correctly refuses it,
+because fine-tuning on 16 record-derived tokens does not move the held-out
+loss enough. The negative is specific to the data and the consolidation
+strategy, not to the mechanism. A real consolidation that improves
+recall_newer needs a consolidator that trains on the replayed memory
+content (fetched from the private store) and a pre-registered margin.
+
 ## The loop
 
 ```

@@ -449,8 +449,12 @@ def _cmd_dream(args: argparse.Namespace) -> int:
     journal = DreamJournal(args.journal or sidecar / "dreams.jsonl")
     taint = TaintLedger(args.taint or sidecar / "taint.json")
     try:
-        consolidator = command_consolidator(shlex.split(args.trainer))
-        evaluator = command_evaluator(shlex.split(args.evaluator))
+        # ``shlex`` is POSIX-oriented: on Windows a backslash in a path is
+        # treated as an escape and the path is mangled. Use the non-POSIX
+        # mode there so backslashes survive.
+        posix = os.name != "nt"
+        consolidator = command_consolidator(shlex.split(args.trainer, posix=posix))
+        evaluator = command_evaluator(shlex.split(args.evaluator, posix=posix))
     except (DreamError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return EXIT_INVALID

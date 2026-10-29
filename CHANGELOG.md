@@ -25,6 +25,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Authorization header. Measured: 15 tests pass, exit 0; full suite 426
   passed, 8 skipped, exit 0. The tool surface (M6b) remains.
 
+**M3: real consolidation run** (`crates/pmc-train/examples/dream_consolidate.rs`, `crates/pmc-train/examples/dream_evaluate.rs`)
+
+- Real consolidator (fine-tune on record-derived tokens, loads the baseline
+  checkpoint, writes the candidate) and real evaluator (loss-derived
+  metrics). The dream ran end to end and the gate refused it on
+  recall_newer (0.002783 to 0.003275, bound 0.003783). Raw numbers in
+  docs/lab.md. Also fixed a shlex Windows-path bug in `_cmd_dream`.
+
 **M3: dream CLI path** (`bench/dream_consolidator.py`, `bench/dream_evaluator.py`)
 
 - End-to-end `pmc dream` run with an identity consolidator and a mechanics
