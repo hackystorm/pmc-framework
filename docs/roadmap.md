@@ -78,10 +78,53 @@ reference core overfits one fixed 48-token sequence.
 - First target: a small public corpus (TinyStories subset or equivalent),
   fixed and versioned by digest.
 
+### M1 contract: `pmc-token` (written before implementation)
+
+- `Tokenizer::from_reader(reader: &GgufReader) -> Result<Tokenizer, TokenizerError>`
+  reads `tokenizer.ggml.model` (only `gpt2` byte-level BPE is in scope;
+  anything else is refused by name), `tokenizer.ggml.tokens` and
+  `tokenizer.ggml.merges` (both required for BPE), `tokenizer.ggml.scores`
+  and `tokenizer.ggml.token_type` (optional; a wrong length is refused), and
+  the optional `bos`/`eos`/`unk` id metadata.
+- `Tokenizer::encode(&self, text: &str) -> Result<Vec<u32>, TokenizerError>`
+  is deterministic byte-level BPE. Special tokens (CONTROL and
+  USER_DEFINED types) split the text first, earliest position then longest
+  match wins. Each remaining segment is pretokenized by a hand-rolled
+  scanner implementing the GPT-2 pretoken pattern without regex: `\p{L}` is
+  approximated by `char::is_alphabetic`, `\p{N}` by `char::is_numeric`,
+  `\s` by `char::is_whitespace`, contractions are the fixed lowercase set
+  `'s 't 're 've 'm 'll 'd`. The approximation is declared here and pinned
+  by fixed cases in the tests. Each pretoken's UTF-8 bytes map into the
+  GPT-2 byte alphabet; adjacent pairs merge by lowest rank until no rank
+  applies; a piece not in the vocabulary is an error, never a silent unk.
+- `Tokenizer::decode_bytes(&self, ids: &[u32]) -> Result<Vec<u8, TokenizerError>`
+  and `Tokenizer::decode_string(&self, ids: &[u32]) -> Result<String, TokenizerError>`
+  invert the byte map; `decode_string` refuses non-UTF-8 instead of
+  replacing; a character outside the byte alphabet is an error naming the
+  token. BOS and EOS are never added implicitly; callers compose with the
+  `bos_id`/`eos_id` accessors.
+- Accessors: `vocab_size`, `bos_id`, `eos_id`, `unk_id`.
+- Guarantees under test: the byte alphabet is a bijection over all 256 byte
+  values; `decode(encode(x)) == x` for arbitrary UTF-8 without special
+  tokens; the same input yields the same ids on every call.
+
 **Gate (pre-registered).** Held-out perplexity below the random-init baseline
 by a declared margin; the Rust/Python parity test extended to the text path;
 one command reproduces the run from seed + config + corpus digest.
 **Evidence:** E3.
+
+**Status (2026-10-29):** first work package delivered — the `pmc-token`
+crate (`crates/pmc-token/`) reads `tokenizer.ggml.*` from a GGUF and
+implements byte-level BPE with no external crates and no regex: the GPT-2
+byte alphabet (a bijection over all 256 values), a hand-rolled pretoken
+scanner whose Unicode-class approximation is declared and pinned by fixed
+cases, rank-ordered merges, special-token splitting (earliest then longest),
+and `decode_bytes`/`decode_string` that refuse invalid UTF-8. Measured:
+`cargo test -p pmc-token` 13 passed, 0 failed, exit 0, including a
+metadata-only GGUF roundtrip and an env-gated real-model roundtrip
+(`PMC_TEST_GGUF`). Remaining M1 work: the corpus format and sharding, then
+the next-token loss in `pmc-train`.
+
 
 ### M2 — Dataset parsing module (needs M1)
 

@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**The `pmc-token` crate** (`crates/pmc-token/`)
+
+- The first M1 work package: byte-level BPE over GGUF tokenizer metadata,
+  no external crates and no regex. Reads `tokenizer.ggml.model` (only
+  `gpt2` is in scope; anything else is refused by name), `tokens`, `merges`,
+  `scores`, `token_type`, and the bos/eos/unk ids. Implements the GPT-2
+  byte alphabet, a hand-rolled pretoken scanner with the Unicode-class
+  approximation declared and pinned by fixed cases, rank-ordered merges,
+  special-token splitting, and `decode_bytes`/`decode_string` that refuse
+  invalid UTF-8. Measured: 13 tests pass, exit 0, including a
+  metadata-only GGUF roundtrip and an env-gated real-model roundtrip.
+
 **The roadmap to v1.0 and the orchestrator prompt** (`docs/roadmap.md`, `docs/orchestrator_prompt.md`)
 
 - `docs/roadmap.md` states the stable-release criteria R1-R7 and milestones

@@ -1,0 +1,15 @@
+[package]
+name = "pmc-token"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Byte-level BPE tokenization over GGUF tokenizer metadata, standard library only."
+
+[lib]
+name = "pmc_token"
+path = "src/lib.rs"
+
+[dependencies]
+pmc-gguf = { path = "../pmc-gguf" }
