@@ -829,6 +829,40 @@ rejected from current model, train with DPO on user dataset chosen
 responses, measure held-out) is in place and measured; the instability is a
 property of the model and the data, not of the loop.
 
+## Dense neural memory in the model file (M5a, 2026-10-30)
+
+Pre-registration: the trained state encoder is fused into a base GGUF as dense
+`pmc.state.encoder.*` F32 tensors, and the resulting file carries the bank the
+manifest says it carries. The gate requires that every published tensor name
+resolve to a dense F32 tensor in the output, that the fused parameters
+round-trip value for value, that the base tensor survive, and that the geometry
+read back from the file be the geometry that was written.
+
+Command:
+```
+pmc-rust state-memory --base base.gguf --weights state.pmc --out fused.gguf
+```
+
+What is measured (one run, 2026-10-30, synthetic GGUF and synthetic weights):
+- tensor names published and tensors present: identical, count 1 + names
+- the base tensor survives the fusion: kind unchanged
+- the head tensor's bytes round-trip: equal to the fused parameter slices
+- geometry recorded as typed metadata and read back: projection 128, hidden 256,
+  layers 2, hosts [64, 64], n_embd 64
+- a truncated weights file: refused, and no output file is written
+
+Interpretation (E1: unit-level mechanism, synthetic inputs; no GGUF loaded, no
+model run): the *placement* is measured, not the *memory*. A trained encoder
+now has a path into the model file as dense weights, which is what the goal's
+"no JSON files for memory" requires, but these tests produced the weights
+themselves and never ran a model, so they prove the mechanism writes and reads
+what it claims and nothing about whether the fused bank improves recall.
+
+The remaining gate is the one the repo already records: fuse a *trained*
+50-100M encoder, consume it from the live engine, and measure recall against
+the no-memory control. That needs the LFM2 extractions, which are external to
+this clone.
+
 ## The loop
 
 ```

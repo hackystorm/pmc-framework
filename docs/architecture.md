@@ -216,7 +216,7 @@ the slow one and check the claim.
 | `pmc-train` | Training loop, dream consolidation, artifact export |
 | `pmc-ffi` | C ABI for the Python side |
 | `pmc-discovery` | Latent state discovery, metadata-only output |
-| `pmc-cli` | Single binary: train, discover, export |
+| `pmc-cli` | Single binary: train, discover, export, and state-memory fusion |
 
 ## Companion construction
 

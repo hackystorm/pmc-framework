@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use pmc_cli::fuse::{fuse, FuseRequest};
+use pmc_cli::state_memory::{fuse as fuse_state_memory, StateMemoryRequest};
 use pmc_core::{Json, Rng};
 use pmc_discovery::StateSpace;
 use pmc_train::{export_checkpoint, train, TrainConfig};
@@ -41,6 +42,8 @@ Usage:
   pmc train    [--seed N] [--steps N] [--lr F] [--hidden N] [--keys N] [--out DIR]
   pmc discover [--seed N] [--points N] [--dim N] [--k N]
   pmc fuse     --base BASE.gguf --rows ROWS.bin --meta META.json --out OUT.gguf
+               [--manifest MANIFEST.json]
+  pmc state-memory --base BASE.gguf --weights STATE.pmc --out OUT.gguf
                [--manifest MANIFEST.json]
   pmc version
 "
@@ -132,6 +135,39 @@ fn main() -> ExitCode {
                 }
                 Err(error) => {
                     eprintln!("error: fuse failed: {}", error);
+                    ExitCode::from(1)
+                }
+            }
+        }
+        "state-memory" => {
+            let (Some(base), Some(weights), Some(out)) = (
+                option(&args, "--base"),
+                option(&args, "--weights"),
+                option(&args, "--out"),
+            ) else {
+                eprintln!("error: state-memory requires --base, --weights and --out");
+                usage();
+                return ExitCode::from(1);
+            };
+            let manifest = option(&args, "--manifest");
+            if manifest.is_none() && args.iter().any(|arg| arg == "--manifest") {
+                eprintln!("error: --manifest requires a path");
+                usage();
+                return ExitCode::from(1);
+            }
+            let request = StateMemoryRequest {
+                base: PathBuf::from(base),
+                weights: PathBuf::from(weights),
+                out: PathBuf::from(out),
+                manifest: manifest.map(PathBuf::from),
+            };
+            match fuse_state_memory(&request) {
+                Ok(manifest) => {
+                    println!("{}", manifest.to_string());
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("error: state-memory failed: {}", error);
                     ExitCode::from(1)
                 }
             }

@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+**A dense neural memory bank in the model file** (`crates/pmc-cli/src/state_memory.rs`,
+`crates/pmc-cli/tests/state_memory.rs`)
+
+`pmc-rust state-memory --base BASE.gguf --weights STATE.pmc --out OUT.gguf`
+fuses a trained PMC state encoder's parameters into a GGUF as dense
+`pmc.state.encoder.*` F32 tensors. The encoder is the small neural network the
+goal asks for: a per-host input projection, a shared residual body, and an L2
+key, whose trained weights *are* the memory.
+
+This is the answer to "no JSON files for memory". A memory in a JSON sidecar is
+a file a loader ignores, a backup can drop, and a person can edit without
+leaving a trace. A memory in the model file travels with the model, is covered
+by the model's digest, and needs no second program at inference time. The gate
+and up branch of each SwiGLU layer are written as one `[2h, h]` tensor because
+they are one operation, and the geometry — projection, hidden, layers, key
+dimensions, host dimensions, the base model's `n_embd`, the tensor names and
+the weight digest — is recorded as typed GGUF metadata so a reader never has to
+infer it.
+
+Three tests (`crates/pmc-cli/tests/state_memory.rs`) verify the bank against
+the file that was actually written: the names the manifest publishes are the
+tensors the file carries, the fused parameters round-trip value for value, the
+base tensor survives, the geometry reads back as the metadata it was written
+as, and a truncated weights file is refused with no output written. No GGUF and
+no llama.cpp are needed; the tests compare numbers they produced themselves.
+
 ### Fixed
 
 **`aiohttp` is an extra, not a hard dependency** (`pyproject.toml`,

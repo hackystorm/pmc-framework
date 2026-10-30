@@ -285,7 +285,8 @@ crates/pmc-token/    Rust: the tokenizer and its special-token handling
 crates/pmc-train/    Rust: trainer, dream consolidation, GGUF export, and the
                      PMC state encoder (`src/pmc_state.rs`)
 crates/pmc-ffi/      Rust: C ABI for the Python side
-crates/pmc-cli/      Rust: the `fuse` binary the Python CLI is a facade over
+crates/pmc-cli/      Rust: the `fuse` and `state-memory` binaries the Python
+                     CLI is a facade over
 crates/pmc-discovery/ Rust: latent state discovery, metadata-only output
 crates/pmc-consciousness/ Rust: indicator harnesses
 bench/                measurement harnesses: hidden-state probes, the
