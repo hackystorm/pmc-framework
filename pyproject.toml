@@ -27,6 +27,11 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 eval = ["numpy>=1.24"]
+# The FRENESIS daemon's HTTP and WebSocket surface. The framework's core stays
+# standard library only, which is a non-negotiable constraint in docs/lab.md, so
+# the server is opt-in rather than a hard dependency: `pip install
+# pmc-framework[frenesis]` for the daemon, and the rest with nothing installed.
+frenesis = ["aiohttp>=3.9"]
 
 [project.urls]
 Homepage = "https://github.com/hackystorm/pmc-framework"

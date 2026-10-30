@@ -8,6 +8,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+**`aiohttp` is an extra, not a hard dependency** (`pyproject.toml`,
+`src/pmc/runtime/frenesis_daemon.py`)
+
+- The daemon's HTTP and WebSocket surface imported `aiohttp` at module scope,
+  so a machine without it could not import the module at all — and the
+  framework's non-negotiable constraint is standard library only in Python. It
+  is now the optional `frenesis` extra (`pip install pmc-framework[frenesis]`).
+  The import is guarded, the failure names the fix instead of surfacing as an
+  AttributeError inside aiohttp's own frames, and
+  `LlamaServerManager.health_check` reports an unhealthy llama-server rather
+  than raising out of a routine the daemon calls in a loop. `dependencies` stays
+  empty. Four tests (`tests/test_frenesis_daemon.py`), one of which blocks
+  `aiohttp` through a real import hook rather than simulating it in-process, so
+  the guard is exercised by the condition it actually guards.
+
+### Fixed
+
 **The FRENESIS daemon could not be installed** (`src/pmc/runtime/frenesis_daemon.py`,
 `launch_daemon.py`) and **wrote a log file at import** (both files)
 

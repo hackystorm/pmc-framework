@@ -45,8 +45,23 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
-import aiohttp
-from aiohttp import web
+# The framework's core is standard library only, and that is a non-negotiable
+# constraint in `docs/lab.md`. The daemon's HTTP and WebSocket surface is the
+# one part that wants a server, so `aiohttp` is an optional dependency declared
+# as the `frenesis` extra rather than a hard one: importing this module must not
+# require it, and only starting the HTTP surface does.
+AIHTTP_MISSING = (
+    "the FRENESIS HTTP/WebSocket surface needs the optional 'frenesis' "
+    "dependency: pip install 'pmc-framework[frenesis]'. Everything else in "
+    "this module runs without it."
+)
+
+try:  # pragma: no cover - presence of an optional dependency
+    import aiohttp
+    from aiohttp import web
+except ImportError:  # pragma: no cover - absence of an optional dependency
+    aiohttp = None
+    web = None
 
 # PMC imports. Relative, so this module imports from an installed package and
 # from a checkout alike: a sys.path insert plus `src.pmc.*` only works before
@@ -57,6 +72,17 @@ from .session import CompanionRuntime, Turn
 from .tools import ToolRegistry
 
 logger = logging.getLogger("frenesis_daemon")
+
+
+def _require_http():
+    """The aiohttp module, or a message naming how to get it.
+
+    Called at the point the HTTP surface is built, not at import, so a machine
+    without the optional extra can still use the daemon's other pieces.
+    """
+    if web is None:
+        raise RuntimeError(AIHTTP_MISSING)
+    return web
 
 
 def configure_logging(log_file: str | Path | None = None, level: int = logging.INFO) -> None:
@@ -266,7 +292,16 @@ class LlamaServerManager:
         self.process = None
     
     async def _health_check(self) -> bool:
-        """Check if llama-server is responding."""
+        """Check if llama-server is responding.
+
+        An HTTP client is needed here, and that is the optional dependency. A
+        missing one is reported as an unhealthy llama-server rather than raised:
+        the daemon's automatic restart is the correct response either way, and
+        this function's contract is a boolean, not an exception.
+        """
+        if aiohttp is None:
+            logger.warning(AIHTTP_MISSING.strip())
+            return False
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -461,6 +496,9 @@ class HTTPServer:
     """HTTP/WebSocket server for external events."""
     
     def __init__(self, config: DaemonConfig, event_bus: EventBus, runtime: FRENESISRuntime):
+        # The one place the optional dependency is required, checked here so
+        # the failure names the fix instead of an AttributeError deep in aiohttp.
+        _require_http()
         self.config = config
         self.event_bus = event_bus
         self.runtime = runtime

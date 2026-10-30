@@ -183,3 +183,108 @@ def test_an_import_leaves_nothing_running():
     # Creating a daemon requires a config; importing does not create one.
     assert module.DaemonConfig is not None
     assert module.configure_logging.__doc__ is not None
+
+
+# --- The optional HTTP dependency --------------------------------------
+
+
+def test_the_framework_core_declares_no_hard_dependencies():
+    """The stdlib-only constraint is a non-negotiable one, and it holds.
+
+    `aiohttp` belongs to the daemon's HTTP surface, so it is an extra rather
+    than a hard dependency: a hard one would make the whole framework
+    uninstallable on a machine without it.
+    """
+    import tomllib
+
+    root = Path(__file__).resolve().parents[1]
+    with (root / "pyproject.toml").open("rb") as stream:
+        project = tomllib.load(stream)
+    assert project["project"]["dependencies"] == []
+    optional = project["project"]["optional-dependencies"]
+    assert any("aiohttp" in entry for entry in optional.get("frenesis", []))
+
+
+def test_the_missing_dependency_is_named_when_the_http_surface_is_built(tmp_path):
+    """Refusing to start the HTTP surface must say how to fix it.
+
+    The alternative is an AttributeError somewhere inside aiohttp's own code,
+    which names nothing and sends a reader looking in the wrong place.
+    """
+    result = _in_subprocess(
+        "import pmc.runtime.frenesis_daemon as m\n"
+        "import types, sys\n"
+        # Simulate a machine without the optional extra.
+        "m.web = None\n"
+        "m.aiohttp = None\n"
+        "try:\n"
+        "    m._require_http()\n"
+        "except RuntimeError as error:\n"
+        "    print(str(error))\n",
+        tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "pmc-framework[frenesis]" in result.stdout
+
+
+def test_the_module_imports_when_the_optional_dependency_is_absent(tmp_path):
+    """The claim the extra exists for, checked for real.
+
+    Simulating absence inside a running interpreter proves nothing about
+    import-time behaviour: the guard is the `try/except ImportError` at the top
+    of the module, and that only fires when the import genuinely fails. A
+    meta_path finder makes `aiohttp` unimportable, which is the actual
+    condition, and then the rest of the module must still come up.
+    """
+    result = _in_subprocess(
+        "import sys\n"
+        "class Block:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        if name == 'aiohttp' or name.startswith('aiohttp.'):\n"
+        "            raise ImportError('aiohttp is blocked for this test')\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, Block())\n"
+        "import builtins\n"
+        "real_import = builtins.__import__\n"
+        "def guarded(name, *args, **kwargs):\n"
+        "    if name == 'aiohttp' or name.startswith('aiohttp.'):\n"
+        "        raise ImportError('aiohttp is blocked for this test')\n"
+        "    return real_import(name, *args, **kwargs)\n"
+        "builtins.__import__ = guarded\n"
+        "for name in [n for n in sys.modules if n == 'aiohttp' or n.startswith('aiohttp.')]:\n"
+        "    del sys.modules[name]\n"
+        "import pmc.runtime.frenesis_daemon as m\n"
+        "assert m.web is None, 'aiohttp was importable after all'\n"
+        "assert m.aiohttp is None\n"
+        "# The rest of the daemon still works without it.\n"
+        "assert m.DaemonConfig is not None\n"
+        "assert m.Scheduler is not None\n"
+        "assert m.EventBus is not None\n"
+        "print('imports without the extra')\n",
+        tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "imports without the extra"
+
+
+def test_the_health_check_reports_unhealthy_without_the_extra(tmp_path):
+    """A missing HTTP client is an unhealthy llama-server, not a crash.
+
+    `LlamaServerManager.health_check` returns a boolean by contract, so the
+    missing dependency is reported through that contract rather than raised out
+    of a routine the daemon calls in a loop.
+    """
+    result = _in_subprocess(
+        "import asyncio, pathlib\n"
+        "import pmc.runtime.frenesis_daemon as m\n"
+        "m.aiohttp = None\n"
+        "config = m.DaemonConfig(\n"
+        "    workspace=pathlib.Path('ws'), llama_model_path=pathlib.Path('m.gguf'),\n"
+        "    llama_server_path=pathlib.Path('llama-server'),\n"
+        ")\n"
+        "manager = m.LlamaServerManager(config)\n"
+        "print(asyncio.run(manager.health_check()))\n",
+        tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False"
