@@ -8,6 +8,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+**The FRENESIS daemon could not be installed** (`src/pmc/runtime/frenesis_daemon.py`,
+`launch_daemon.py`) and **wrote a log file at import** (both files)
+
+- The module reached its dependencies through a `sys.path` insert plus
+  `src.pmc.runtime.*`, which only resolves before `pip install`. After it,
+  nothing works. The imports are relative now (`from .session import ...`), so
+  the module is importable from a checkout and from an installed package, and
+  the daemon holds the same class objects the rest of the framework does rather
+  than a second copy of them. `launch_daemon.py` had the same defect and the
+  same fix.
+- Logging was configured at module scope with a `FileHandler` writing
+  `frenesis_daemon.log` into the **current working directory**, so merely
+  importing the module created a file wherever the importer happened to be
+  standing — which is how a stray log reached the repository root and the
+  publish gate. Logging is now configured by `configure_logging()`, called from
+  the entry point, with a file written only when the caller names one. Seven
+  tests (`tests/test_frenesis_daemon.py`), run in a subprocess where the
+  property is actually import behaviour. One of them asserts the old sys.path
+  arrangement would fail its own check, so the test cannot pass by merely
+  working.
+
+### Fixed
+
 **Seven documentation and wiring defects** (`README.md`, `docs/lab.md`,
 `docs/claims.md`, `MODEL_CARD.md`, `SECURITY.md`, `configs/runtime_default.json`,
 `.github/workflows/ci.yml`, `src/pmc/runtime/judge.py`,
