@@ -8,6 +8,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**SPIN is now the dream cycle's consolidator** (`crates/pmc-train/examples/dream_spin.rs`,
+`crates/pmc-train/tests/dream_spin.rs`, `src/pmc/cli.py`)
+
+`pmc dream --spin` consolidates with Self-Play Fine-Tuning, which closes the
+gap the goal named: SPIN existed in Rust but was not wired into the dream
+cycle.
+
+The distinction from what the dream cycle did before is the whole point.
+Supervised consolidation asks "can the model reproduce this text?", which any
+trainer can do and which produces a model that memorised a transcript. SPIN
+asks "can the model tell its own output from a better one?": the replayed
+memory is the *chosen* side, and the model's own current generation is the
+*rejected* side, regenerated every step so the training signal tracks what the
+model can currently do.
+
+No external judge is consulted anywhere. That was the earlier instruction and
+it is now structural rather than a choice: the preference signal comes from the
+memory being replayed, so an instance that needs an outside party to approve
+its own consolidation has not shown the mechanism.
+
+The consolidator implements the trainer interface the pipeline already speaks -
+`<baseline> <candidate> <replay_manifest>` - reads the replay manifest as the
+pipeline's contract, fetches content from the private store itself (the
+consolidator is the only party allowed to read it), and orders by emotional
+load. A digest mismatch, a null load, an absent blob, a truncated weights file
+and a wrong-shaped manifest are each refused with a message naming what was
+refused, and no candidate is written on refusal. The embedding is derived from
+the baseline's own bytes rather than a seed, because a checkpoint records no
+seed - only a digest - so the whole run is reproducible from the two files it is
+given.
+
+Ten tests (`crates/pmc-train/tests/dream_spin.rs`) check the interface against
+the real checkpoint format with a checkpoint the tests write themselves: a
+well-formed replay consolidates and writes a loadable candidate that is not
+byte-identical to the baseline, the same inputs produce the same candidate, a
+stepped baseline is still readable, and each refusal path refuses. No GGUF and
+no llama.cpp are needed.
+
+The CLI gains `--spin` and `--trainer` becomes optional when it is given: a
+dream with neither is refused, because which consolidator ran is part of the
+result.
+
+### Added
+
 **A dense neural memory bank in the model file** (`crates/pmc-cli/src/state_memory.rs`,
 `crates/pmc-cli/tests/state_memory.rs`)
 

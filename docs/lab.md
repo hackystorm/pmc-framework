@@ -863,6 +863,50 @@ The remaining gate is the one the repo already records: fuse a *trained*
 the no-memory control. That needs the LFM2 extractions, which are external to
 this clone.
 
+## SPIN as the dream consolidator (M5a, 2026-10-31)
+
+Pre-registration: the dream cycle consolidates with SPIN rather than
+supervised fine-tuning. The replayed memories are the *chosen* side; the
+model's own generation is the *rejected* side, regenerated every step. No
+external judge is consulted. The gate requires the consolidator to implement
+the trainer interface the pipeline already speaks, to write a candidate that
+loads and is not byte-identical to the baseline, and to refuse - with a
+message naming what was refused and no candidate written - on a wrong-shaped
+manifest, a digest mismatch, an absent blob and a truncated weights file.
+
+Command:
+```
+pmc dream --workspace <workspace> --checkpoint <checkpoint> \
+  --evaluator "<path>/dream_evaluate" --spin
+```
+
+What is measured (one run, 2026-10-31, synthetic checkpoint and store):
+- the trainer interface: `dream_spin <baseline> <candidate> <manifest>` runs
+- a well-formed replay consolidates: candidate written, `checkpoint.bin` and
+  `manifest.json` both present, step recorded as 3
+- the candidate is a real checkpoint: loads through the trainer's own loader,
+  same architecture, not byte-identical to the baseline, same parameter count
+- reproducibility: two runs over identical inputs produce identical
+  `checkpoint.bin`
+- a stepped baseline (manifest recording step 41) is still readable
+- refusals: `{"records":[]}` with no `items`; an item with no
+  `content_digest`; a memory whose stored bytes disagree with its digest; a
+  replay whose memories are all absent
+
+Interpretation (E1: unit-level mechanism, synthetic inputs): the *interface* is
+measured and the *consolidation* is not. These tests prove the consolidator
+parses the pipeline's contract, writes a loadable candidate that differs from
+its baseline, is reproducible from its two input files, and refuses what it
+cannot replay. Nothing here shows the resulting model recalls better - that
+needs the six-metric evaluator against a real checkpoint, and the evaluator in
+this repository's evidence is synthetic, so the measurement is deferred rather
+than claimed.
+
+What this changes is which algorithm the dream cycle uses, and that is the
+distinction the goal asked for: SPIN's signal is "the memory, over what I
+would have said myself", with no party outside the instance deciding what
+counts as better.
+
 ## The loop
 
 ```

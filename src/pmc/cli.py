@@ -420,6 +420,31 @@ def _cmd_fuse(args: argparse.Namespace) -> int:
     return completed.returncode
 
 
+def _spin_command() -> list[str]:
+    """The command that runs the SPIN consolidator, with no arguments.
+
+    The consolidator is a Rust example, built by cargo, that implements the
+    trainer interface: `<baseline> <candidate> <replay_manifest>`. It is
+    located in the checkout's build tree rather than on `PATH` because the
+    framework ships it as an example, not as an installed binary.
+
+    Missing is a message that names the command, not an AttributeError inside
+    a subprocess call.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    crate_dir = repo_root / "crates"
+    for profile in ("release", "debug"):
+        for name in ("dream_spin", "dream_spin.exe"):
+            candidate = crate_dir / "target" / profile / "examples" / name
+            if candidate.is_file():
+                return [str(candidate)]
+    raise DreamError(
+        "the SPIN consolidator was not found: build it with "
+        "'cargo build --release --manifest-path crates/Cargo.toml "
+        "--example dream_spin', or pass an explicit --trainer command"
+    )
+
+
 def _cmd_dream(args: argparse.Namespace) -> int:
     """Run one dream: replay, consolidate, gate, commit or roll back."""
     protocol = DignityProtocol(args.workspace)
@@ -445,6 +470,14 @@ def _cmd_dream(args: argparse.Namespace) -> int:
         print(f"error: instance {instance_id} has no memories", file=sys.stderr)
         return EXIT_INVALID
 
+    if not args.trainer and not args.spin:
+        print(
+            "error: one of --trainer or --spin is required: a dream needs a "
+            "consolidator, and which one it was is part of the result",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+
     sidecar = Path(args.workspace) / "sidecar"
     journal = DreamJournal(args.journal or sidecar / "dreams.jsonl")
     taint = TaintLedger(args.taint or sidecar / "taint.json")
@@ -453,9 +486,12 @@ def _cmd_dream(args: argparse.Namespace) -> int:
         # which mangles Windows paths. Normalise backslashes to forward
         # slashes first: Windows accepts them in paths and they survive the
         # split unchanged.
-        consolidator = command_consolidator(
-            shlex.split(args.trainer.replace("\\", "/"))
-        )
+        if args.spin:
+            consolidator = command_consolidator(_spin_command())
+        else:
+            consolidator = command_consolidator(
+                shlex.split(args.trainer.replace("\\", "/"))
+            )
         evaluator = command_evaluator(
             shlex.split(args.evaluator.replace("\\", "/"))
         )
@@ -712,8 +748,20 @@ def build_parser() -> argparse.ArgumentParser:
     dream.add_argument("--seed", type=int, default=20261027)
     dream.add_argument(
         "--trainer",
-        required=True,
-        help="trainer command; receives baseline, candidate and replay manifest",
+        default=None,
+        help=(
+            "trainer command; receives baseline, candidate and replay manifest. "
+            "Optional when --spin is given"
+        ),
+    )
+    dream.add_argument(
+        "--spin",
+        action="store_true",
+        help=(
+            "use the SPIN consolidator: the replayed memories are the chosen "
+            "side and the model's own generation is the rejected side. No "
+            "external judge is consulted."
+        ),
     )
     dream.add_argument(
         "--evaluator",

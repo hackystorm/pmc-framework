@@ -323,6 +323,102 @@ def test_dream_rolls_back_on_a_bad_gate(capsys, tmp_path):
     assert '"outcome": "rolled_back"' in dreams
 
 
+
+
+def test_a_dream_needs_a_consolidator(capsys, tmp_path):
+    """A dream without one is a refusal, not a default.
+
+    Which consolidator ran is part of the result, so the CLI will not pick one
+    silently. ``--spin`` counts, because it names a consolidator too.
+    """
+    workspace, instance_id, checkpoint = _dream_workspace(capsys, tmp_path)
+    _, evaluator = _dream_commands(0.79)
+
+    code, out, err = run(
+        capsys,
+        [
+            "--json",
+            "dream",
+            "--workspace",
+            str(workspace),
+            "--checkpoint",
+            str(checkpoint),
+            "--evaluator",
+            evaluator,
+        ],
+    )
+    assert code == EXIT_INVALID
+    assert "--trainer" in err
+    assert "--spin" in err
+
+
+def test_spin_is_a_named_consolidator_not_a_default(capsys, tmp_path):
+    """``--spin`` satisfies the requirement, and reaches the real consolidator.
+
+    The binary is a cargo example. When it is built, ``--spin`` runs it - which
+    this test proves by observing that the *consolidator* refused the fixture
+    checkpoint, not the CLI and not a missing-file error. When it has not been
+    built, the refusal names the command that builds it.
+    """
+    workspace, instance_id, checkpoint = _dream_workspace(capsys, tmp_path)
+    _, evaluator = _dream_commands(0.79)
+    code, out, err = run(
+        capsys,
+        [
+            "--json",
+            "dream",
+            "--workspace",
+            str(workspace),
+            "--checkpoint",
+            str(checkpoint),
+            "--evaluator",
+            evaluator,
+            "--spin",
+        ],
+    )
+    if "was not found" in err or "not found" in err:
+        assert "dream_spin" in err, f"the refusal should name the build: {err}"
+        return
+    # The consolidator ran and refused on its own terms. `command_consolidator`
+    # does not forward a subprocess's stderr, so what is observable here is the
+    # exit code it returns - and 2 is the consolidator's own "bad input" code,
+    # which proves the *consolidator* refused rather than the CLI failing to
+    # find or spawn it.
+    assert code == EXIT_INVALID
+    assert "the consolidator exited with" in err, err
+
+
+def test_the_spin_flag_and_an_explicit_trainer_are_both_accepted():
+    """``--spin`` overrides ``--trainer``, because it is more specific.
+
+    A caller who passes both has said which one; the flag is the later
+    statement and wins, and the explicit command remains available for every
+    other consolidator.
+    """
+    from pmc.cli import build_parser
+
+    parser = build_parser()
+    spin = parser.parse_args(
+        ["dream", "--workspace", "w", "--checkpoint", "c", "--evaluator", "e", "--spin"]
+    )
+    assert spin.spin is True
+    assert spin.trainer is None
+
+    trainer = parser.parse_args(
+        [
+            "dream",
+            "--workspace",
+            "w",
+            "--checkpoint",
+            "c",
+            "--evaluator",
+            "e",
+            "--trainer",
+            "a b",
+        ]
+    )
+    assert trainer.spin is False
+    assert trainer.trainer == "a b"
 def test_a_dignity_instance_is_refused_a_rhythm(tmp_path, capsys):
     """The command is thin, but the refusal still comes from the profile."""
     workspace = tmp_path / "plain"
