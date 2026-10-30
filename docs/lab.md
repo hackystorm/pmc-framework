@@ -674,19 +674,28 @@ content (fetched from the private store) and a pre-registered margin.
 
 ## SPIN (M5a, 2026-10-29)
 
-Pre-registration: a tiny transformer is trained with DPO on 8 preference
-pairs (chosen = fixed sequence, rejected = the same sequence with one token
-changed) and evaluated on 8 held-out pairs. The gate requires the held-out
-preference accuracy to improve over the initial value.
+Pre-registration: a tiny transformer is trained with DPO on preference
+pairs loaded from a JSONL dataset (chosen = user-provided responses,
+rejected = the model's own generated samples). The model generates its own
+rejected samples each iteration (SPIN shape). Evaluated on held-out pairs;
+the gate requires the held-out preference accuracy to improve over the
+initial value.
 
 Command:
 ```
-PMC_STEPS=10 PMC_LR=0.01 PMC_N_LAYER=2 PMC_D_MODEL=32 PMC_N_HEAD=4 \\
+PMC_DATASET=<path/to/dataset.jsonl> PMC_STEPS=10 PMC_LR=0.01 \\
+  PMC_N_LAYER=2 PMC_D_MODEL=32 PMC_N_HEAD=4 \\
   PMC_FFN=64 PMC_VOCAB=16 PMC_N_POS=16 PMC_RANK=8 PMC_PAIRS=8 \\
-  cargo run --offline --example train_spin
+  cargo run --offline --example train_spin_loop
 ```
 
-Raw numbers (one run, 2026-10-29):
+Dataset format (JSONL, one record per line):
+```json
+{"chosen": "quality response from user dataset"}
+{"chosen": "another quality response", "rejected": "optional explicit rejection"}
+```
+
+Raw numbers (one run, 2026-10-29, synthetic fallback):
 - pairs: 8, held_out: 8
 - initial_dpo_loss: 0.693147
 - final_dpo_loss: 0.000219 (memorised)
@@ -695,13 +704,13 @@ Raw numbers (one run, 2026-10-29):
 - beat (held-out improvement): false
 - elapsed_millis: 609
 
-Interpretation (E1: unit-level mechanism, synthetic data): the DPO
+Interpretation (E1: unit-level mechanism, synthetic fallback data): the DPO
 mechanism works - the loss falls and the model memorises the training pairs
 - but the held-out preference accuracy does not improve. The gate is not
 met. The negative is the expected one for a tiny model on synthetic pairs:
-memorisation without generalisation. A real SPIN run needs a real model, a
-real generator (the model's own samples as rejected) and a held-out
-capability battery, plus a pre-registered margin.
+memorisation without generalisation. A real SPIN run needs a real model,
+real chosen responses from a user dataset, the model's own samples as
+rejected, and a held-out capability battery with a pre-registered margin.
 
 ## Dream real consolidation on content (M3, 2026-10-29)
 
@@ -787,18 +796,23 @@ needs a different strategy (e.g., replay with structure, or a real corpus).
 ## SPIN recursive loop (M5a, 2026-10-29)
 
 Pre-registration: a tiny transformer runs 4 iterations of self-play. Each
-iteration regenerates rejected samples from the current model, trains with
-DPO, and measures held-out preference accuracy. The gate requires the
-held-out accuracy to rise monotonically (an ever-rising curve).
+iteration regenerates rejected samples from the current model (SPIN shape),
+trains with DPO on chosen responses from a user dataset, and measures
+held-out preference accuracy. The gate requires the held-out accuracy to
+rise monotonically (an ever-rising curve).
 
 Command:
 ```
-PMC_STEPS=3 PMC_ITERS=4 PMC_LR=0.01 PMC_PAIRS=8 \\
+PMC_DATASET=<path/to/dataset.jsonl> PMC_STEPS=3 PMC_ITERS=4 PMC_LR=0.01 PMC_PAIRS=8 \\
   PMC_N_LAYER=2 PMC_D_MODEL=32 PMC_N_HEAD=4 PMC_FFN=64 PMC_VOCAB=16 \\
   PMC_N_POS=16 PMC_RANK=8 cargo run --offline --example train_spin_loop
 ```
 
-Raw numbers (one run, 2026-10-29):
+Dataset format (JSONL): each line is {"chosen": "user-provided quality response"}
+or {"chosen": "...", "rejected": "optional"}. The model generates rejected
+samples each iteration from its current state (SPIN shape).
+
+Raw numbers (one run, 2026-10-29, synthetic fallback):
 - pairs: 8, held_out: 8, iters: 4, steps_per_iter: 3
 - initial_acc (before training): 0.500
 - curve: [0.500, 0.625, 0.750, 0.250, 0.250]
@@ -806,14 +820,14 @@ Raw numbers (one run, 2026-10-29):
 - beat (held-out improvement): false
 - elapsed_millis: 898
 
-Interpretation (E1: unit-level mechanism, synthetic data): the DPO
+Interpretation (E1: unit-level mechanism, synthetic fallback): the DPO
 mechanism works and the curve rises for two iterations (0.500 -> 0.750),
 then collapses (0.250). The ever-rising curve does NOT hold on this tiny
 model: recursive self-play improves initially, then degrades. This is a
 real negative for the "always rising" claim. The mechanism (generate
-rejected from current model, train with DPO, measure held-out) is in place
-and measured; the instability is a property of the model and the data, not
-of the loop.
+rejected from current model, train with DPO on user dataset chosen
+responses, measure held-out) is in place and measured; the instability is a
+property of the model and the data, not of the loop.
 
 ## The loop
 

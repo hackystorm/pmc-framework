@@ -235,7 +235,7 @@ re-measure — with every number labelled at the evidence level it earned.
 
 | WP | Mechanism | Method summary | Evidence ceiling |
 |---|---|---|---|
-| M5a | SPIN / T-SPIN | Self-generated answers enter training as *rejected* samples only. DPO loss, entropy constraint and KL-to-reference implemented in `pmc-train`. Preferred responses come from external or verified sources; pure generative replay stays forbidden | E3 with external preference source; E1 otherwise |
+| M5a | SPIN / T-SPIN | Self-generated answers enter training as *rejected* samples only. DPO loss, entropy constraint and KL-to-reference implemented in `pmc-train`. Preferred responses come from datasets the user provides; pure generative replay stays forbidden | E3 with external preference source; E1 otherwise |
 | M5b | Hint-delta (G-Zero) | A proposer instance generates hints; the reward is the measured predictive shift, computed from live-runtime logits (same-decode already measured on 350M and 8B). Not self-report: a measurement | E3 |
 | M5c | ReVISE / TRT | `<pmc:refine>` and `<pmc:hint>` tokens added through the existing GGUF vocabulary extension; two-phase curriculum; test-time recursive loop in the runtime, no weight update | E3 (functional, measured) |
 | M5d | R-Zero curriculum | Challenger instances generate *tasks*, never answers. Solver answers; verification by held-out verifier or external judge. Challenger and Solver are separate instances; replication is a declared, journalled resource act | E3 with external verification; E1 otherwise |

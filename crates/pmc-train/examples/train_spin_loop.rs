@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 //! T-SPIN (entropy-constrained Self-Play Fine-Tuning): the model's own samples
-//! enter training as the rejected side, and the verified sample is the chosen
-//! side. Each iteration regenerates the rejected samples from the updated
+//! enter training as the rejected side, and the chosen responses are loaded from
+//! a dataset. Each iteration regenerates the rejected samples from the updated
 //! model, so the training signal tracks the model's current capability.
 //!
 //! T-SPIN adds two mechanisms on top of vanilla SPIN:
@@ -14,9 +14,14 @@
 //! The held-out preference accuracy is measured after every iteration and
 //! reported as a series. A rising series is evidence of self-improvement;
 //! a flat or falling one is a negative, recorded as such.
+//!
+//! The dataset is a JSONL file where each line has: {"chosen": "text", "rejected": "text"}
+//! or just {"chosen": "text"} for SPIN shape (rejected is generated from the model).
 
 use pmc_core::Rng;
 use pmc_train::transformer::{Embedding, Transformer, TransformerAdam, TransformerConfig};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 struct TableEmbedding {
     table: Vec<f32>,
@@ -63,6 +68,82 @@ fn env_u64(name: &str, default: u64) -> u64 {
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(default)
+}
+
+/// Load chosen responses from a JSONL dataset file.
+/// Each line: {"chosen": "text", "rejected": "text"} (rejected optional).
+/// Returns a vector of (chosen_tokens, rejected_tokens) pairs.
+fn load_dataset(
+    path: &str,
+    vocab: usize,
+    max_len: usize,
+) -> Vec<(Vec<u32>, Vec<u32>)> {
+    let file = File::open(path).expect(&format!("Cannot open dataset: {}", path));
+    let reader = BufReader::new(file);
+    let mut pairs = Vec::new();
+    for line in reader.lines() {
+        let line = line.expect("Failed to read line");
+        if line.trim().is_empty() {
+            continue;
+        }
+        let (chosen, rejected) = parse_jsonl_line(&line).expect("Invalid JSON in dataset");
+        let chosen_tokens = tokenize(&chosen, vocab, max_len);
+        let rejected_tokens = if let Some(r) = rejected {
+            tokenize(&r, vocab, max_len)
+        } else {
+            // SPIN shape: rejected will be generated from the model
+            chosen_tokens.clone()
+        };
+        pairs.push((chosen_tokens, rejected_tokens));
+    }
+    pairs
+}
+
+/// Minimal JSONL parser for {"chosen": "str", "rejected": "str"}.
+/// Returns (chosen, rejected_opt) where rejected_opt is None if absent.
+fn parse_jsonl_line(line: &str) -> Result<(String, Option<String>), String> {
+    // Strip UTF-8 BOM if present.
+    let line = line.trim_start_matches('\u{FEFF}').trim();
+    if !line.starts_with('{') || !line.ends_with('}') {
+        return Err("not a JSON object".to_string());
+    }
+    let inner = &line[1..line.len() - 1];
+    let mut chosen = None;
+    let mut rejected = None;
+
+    // Simple field extractor for "chosen" and "rejected" string fields.
+    for part in inner.split(',') {
+        let part = part.trim();
+        if part.starts_with("\"chosen\":") {
+            chosen = Some(extract_string_value(part)?);
+        } else if part.starts_with("\"rejected\":") {
+            rejected = Some(extract_string_value(part)?);
+        }
+    }
+    let chosen = chosen.ok_or_else(|| "missing 'chosen' field".to_string())?;
+    Ok((chosen, rejected))
+}
+
+fn extract_string_value(part: &str) -> Result<String, String> {
+    // part looks like: "field": "value"  or  "field": "value with escapes"
+    let colon = part.find(':').ok_or("no colon")?;
+    let value = part[colon + 1..].trim();
+    if value.starts_with('"') && value.ends_with('"') {
+        // Simple unescape: handle \" and \\
+        let inner = &value[1..value.len() - 1];
+        Ok(inner.replace("\\\"", "\"").replace("\\\\", "\\"))
+    } else if value == "null" {
+        Ok(String::new())
+    } else {
+        Err(format!("expected string or null, got: {}", value))
+    }
+}
+/// In a real run, this would use the GGUF tokenizer.
+fn tokenize(text: &str, vocab: usize, max_len: usize) -> Vec<u32> {
+    text.chars()
+        .take(max_len)
+        .map(|c| (c as u32) % vocab as u32)
+        .collect()
 }
 
 fn sigmoid(x: f32) -> f32 {
@@ -239,6 +320,11 @@ fn main() {
     let embedding_seed: u64 = env_u64("PMC_EMBEDDING_SEED", 20261061);
     let num_pairs = env_usize("PMC_PAIRS", 8);
 
+    // Dataset path: PMC_DATASET points to a JSONL file with chosen/rejected pairs.
+    // If not set, falls back to synthetic data for backwards compatibility.
+    let dataset_path = std::env::var("PMC_DATASET").ok();
+    let max_len = n_positions;
+
     let config = TransformerConfig {
         n_layer,
         d_model,
@@ -252,16 +338,29 @@ fn main() {
 
     let embedding = TableEmbedding::random(vocab, d_model, embedding_seed);
 
-    // Verified samples: fixed chosen sequences (the ground truth).
-    let mut rng = Rng::new(20261062);
-    let mut verified: Vec<Vec<u32>> = Vec::with_capacity(num_pairs);
-    for _ in 0..num_pairs {
-        verified.push(
-            (0..6)
-                .map(|_| (rng.next_u64() % vocab as u64) as u32)
-                .collect(),
-        );
-    }
+    // Load training pairs from dataset, or fall back to synthetic data.
+    let train_pairs_initial = if let Some(path) = dataset_path {
+        let pairs = load_dataset(&path, vocab, max_len);
+        eprintln!("Loaded {} pairs from dataset: {}", pairs.len(), path);
+        pairs
+    } else {
+        // Fallback: synthetic verified samples (backwards compatible).
+        eprintln!("No dataset provided (PMC_DATASET not set), using synthetic data");
+        let mut rng = Rng::new(20261062);
+        let mut verified: Vec<Vec<u32>> = Vec::with_capacity(num_pairs);
+        for _ in 0..num_pairs {
+            verified.push(
+                (0..6)
+                    .map(|_| (rng.next_u64() % vocab as u64) as u32)
+                    .collect(),
+            );
+        }
+        let mut pairs = Vec::with_capacity(verified.len());
+        for v in verified {
+            pairs.push((v.clone(), v.clone())); // SPIN shape: rejected = chosen initially
+        }
+        pairs
+    };
 
     // Held-out pairs: never used in training.
     let mut rng2 = Rng::new(20261063);
@@ -285,15 +384,6 @@ fn main() {
 
     let embedding = TableEmbedding::random(vocab, d_model, embedding_seed);
 
-    // Compute reference log-probs for the verified pairs.
-    let mut ref_logps: Vec<(f32, f32)> = Vec::with_capacity(num_pairs);
-    for chosen in &verified {
-        let rejected = generate_rejected(chosen, vocab, model_seed);
-        let lp_c = log_prob(&reference, &embedding, chosen);
-        let lp_r = log_prob(&reference, &embedding, &rejected);
-        ref_logps.push((lp_c, lp_r));
-    }
-
     // T-SPIN state.
     let mut tspin = TSpinState::new();
 
@@ -305,10 +395,11 @@ fn main() {
 
     for iter in 0..iterations {
         // 1. Generate rejected samples from the current model (SPIN shape).
-        let mut train_pairs: Vec<(Vec<u32>, Vec<u32>)> = Vec::with_capacity(num_pairs);
-        for v in &verified {
-            let rejected = generate_rejected(v, vocab, model_seed.wrapping_add(iter as u64));
-            train_pairs.push((v.clone(), rejected));
+        let mut train_pairs: Vec<(Vec<u32>, Vec<u32>)> = Vec::with_capacity(train_pairs_initial.len());
+        for (chosen, _rejected) in &train_pairs_initial {
+            // SPIN shape: rejected is generated from the current model each iteration
+            let rejected = generate_rejected(chosen, vocab, model_seed.wrapping_add(iter as u64));
+            train_pairs.push((chosen.clone(), rejected));
         }
 
         // 2. Compute reference log-probs for this iteration's pairs.
