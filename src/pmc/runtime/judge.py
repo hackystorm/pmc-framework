@@ -14,14 +14,45 @@ evidence levels for self-improvement claims.
 
 from __future__ import annotations
 
+import hashlib
 import json
-import os
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 from ..runtime.client import ChatClient, ChatError, ChatReply
-from ..runtime.providers import Provider, ProviderResourceBudget, ResourceBudget
-from ..dignity.taint_ledger import TaintLedger  # noqa: F401 - type hint
+from ..runtime.providers import Provider, ResourceBudget
+
+TAINT_SOURCE_EXTERNAL = "external_judge"
+"""What the judge marks on the ledger: the source of a verdict it did not produce."""
+
+
+class TaintLedger(Protocol):
+    """The one method the judge needs from a taint ledger.
+
+    ``pmc.runtime.providers.ExternalCall`` marks a ledger the same way, so a
+    judge wired into an instance's runtime receives the ledger it already has.
+    The protocol keeps this module decoupled from one ledger implementation -
+    that coupling is what made the module fail to import before.
+    """
+
+    def mark(self, digest: str, source: str) -> Any:  # pragma: no cover - protocol
+        ...
+
+
+def _mark_taint(ledger: Any, payload: Any) -> None:
+    """Mark ``payload`` on ``ledger`` as external content.
+
+    A digest of the exact JSON the judge produced, so the marked entry can be
+    checked against the recorded verdict. Failure is swallowed: accounting a
+    judgement must not destroy the judgement.
+    """
+    try:
+        digest = hashlib.sha256(
+            json.dumps(payload, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        ledger.mark(digest, TAINT_SOURCE_EXTERNAL)
+    except Exception:  # noqa: BLE001 - taint must not break the evaluation
+        pass
 
 
 @dataclass
@@ -33,6 +64,26 @@ class JudgeResult:
     metrics: Dict[str, Any]  # Measured metrics (perplexity, accuracy, etc.)
     cost_units: int  # Resource units consumed (budget spending)
     taint_source: str  # Identifier of the external source
+    confidence: float = 0.0
+    """The judge's own confidence, 0.0-1.0.
+
+    It is carried rather than folded away because it is what the evidence level
+    is derived from: without it a reader cannot audit why a verdict earned the
+    level it did, and ``E3`` and ``E4`` would be indistinguishable from ``E1``
+    in the recorded result.
+    """
+
+    def to_dict(self) -> Dict[str, Any]:
+        """The verdict as a record, for a journal or a report."""
+        return {
+            "improved": self.improved,
+            "evidence_level": self.evidence_level,
+            "confidence": self.confidence,
+            "description": self.description,
+            "metrics": self.metrics,
+            "cost_units": self.cost_units,
+            "taint_source": self.taint_source,
+        }
 
 
 @dataclass
@@ -185,27 +236,22 @@ def external_judge(
         metrics["baseline_perplexity"] = 0.0
     if "candidate_perplexity" not in metrics:
         metrics["candidate_perplexity"] = 0.0
-    
+
+    confidence = float(result_dict.get("confidence", 0.0))
     judge_result = JudgeResult(
-        improved=result_dict["improved"],
-        evidence_level=_determine_evidence_level(result_dict["improved"], result_dict["confidence"]),
-        description=result_dict["reason"],
+        improved=bool(result_dict["improved"]),
+        evidence_level=_determine_evidence_level(bool(result_dict["improved"]), confidence),
+        description=str(result_dict["reason"]),
         metrics=metrics,
         cost_units=1,
-        taint_source="external_judge",
+        taint_source=TAINT_SOURCE_EXTERNAL,
+        confidence=confidence,
     )
     
-    # Mark taint ledger if provided
+    # Mark taint ledger if provided: a verdict produced by an external model is
+    # an external source by construction, and the ledger records it as one.
     if taint_ledger is not None:
-        try:
-            import hashlib
-            digest = hashlib.sha256(
-                json.dumps(result_dict, sort_keys=True).encode("utf-8")
-            ).hexdigest()
-            # Mark as external source
-            # (exact taint API depends on the ledger implementation)
-        except Exception:
-            pass  # Taint marking failure should not break the evaluation
+        _mark_taint(taint_ledger, result_dict)
     
     return JudgeResponse(
         result=judge_result,
@@ -254,36 +300,40 @@ def default_judge(
     budget: ResourceBudget,
     request: JudgeRequest,
     taint_ledger: Any = None,
+    client_factory: Any = None,
 ) -> JudgeResponse:
     """Default external judge using a BYOK provider.
-    
+
     This calls an external LLM model to evaluate whether a self-generated
     improvement is genuine. The key invariant is pure_generative_ratio=0.0:
     the judge's positive verdict must not come from self-generated data.
+
+    The budget is spent inside :func:`external_judge`, and the verdict is marked
+    on the taint ledger when one is supplied, so the caller can see which source
+    produced the judgement.
+
+    ``client_factory`` overrides ``provider.client()``; it follows the same
+    convention as :class:`pmc.runtime.providers.ExternalCall` so a test can
+    inject a fake judge model without touching the frozen provider.
     """
-    import hashlib
-    
     # Create a ChatClient from the provider
-    client = provider.client()
-    
+    client = client_factory() if client_factory is not None else provider.client()
+
     # Run the external judge
     response = external_judge(client, request, budget, taint_ledger)
-    
-    # Record the budget spend and taint
-    # (budget.acquire() already called by external_judge)
-    
-    # Mark taint if ledger provided
+
+    # Mark taint if ledger provided. A verdict from an external model is not
+    # self-generated content, so it is marked as an external source rather than
+    # left unmarked; that is what keeps the pure_generative_ratio=0.0 invariant
+    # checkable instead of assumed.
     if taint_ledger is not None:
-        try:
-            digest = hashlib.sha256(
-                json.dumps({
-                    "judge": "external",
-                    "improved": response.result.improved,
-                    "confidence": response.result.confidence,
-                }, sort_keys=True).encode("utf-8")
-            ).hexdigest()
-            # taint_ledger.mark(digest, "external_judge")  # API depends on implementation
-        except Exception:
-            pass
-    
+        _mark_taint(
+            taint_ledger,
+            {
+                "judge": "external",
+                "improved": response.result.improved,
+                "confidence": response.result.confidence,
+            },
+        )
+
     return response

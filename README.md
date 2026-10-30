@@ -19,7 +19,7 @@ retrieved **11 of 30** held-out cross-host questions, with one of six folds
 meeting nothing. The frozen v1–v3 mechanism on the same folds managed **2**.
 The pre-registered floor was 15, and an empty fold fails outright, so the
 gate failed. The numbers are in
-[`docs/lab.md`](docs/lab.md#the-v4-mechanism-pre-registered-2026-10-31).
+[`docs/lab.md`](docs/lab.md#the-v4-mechanism-pre-registered-2026-10-27).
 
 So: a substrate-swappable, weight-resident state has **not** been
 demonstrated here. What follows is what exists without it, and every claim
@@ -195,9 +195,16 @@ print(report.distress_score, report.requires_pause)
 The framework produces artifacts. It is not required at inference time.
 
 ```
-pmc train   ->  adapter.*  +  model.gguf  (memory fused into the weights)
-pmc dream   ->  sidecar updated  ->  new model.gguf
+cargo run --release --example train_lm   ->  checkpoint   (training is Rust)
+pmc fuse --base model.gguf --rows adapter.* --meta meta.json \
+         --out model.gguf               ->  memory fused into the weights
+pmc dream --trainer ... --evaluator ...  ->  sidecar updated -> new model.gguf
 ```
+
+Training is not a `pmc` command: it is the Rust examples in
+`crates/pmc-train/examples/`. The Python CLI is the fuse, governance and
+runtime surface, and `pmc dream` shells out to a `--trainer` command rather
+than owning one.
 
 **Path A — pure GGUF (default).** Load `model.gguf` in `llama.cpp`, LM Studio,
 Ollama, koboldcpp, text-generation-webui, or anything else that reads GGUF.
@@ -267,12 +274,20 @@ src/pmc/runtime/     instance-side runtime: chat client, memory write, state
 src/pmc/eval/        recall, forgetting, calibration, false memory, rumination
 src/pmc/reference.py independent Python implementation of the trainer, used
                      as the oracle for the Rust/Python parity test
-src/pmc/cli.py       pmc train | dream | companion | instances | journal | audit
+src/pmc/cli.py       the Python CLI: fuse, dream, companion, instances,
+                     runtime, rhythm, journal, audit, welfare, object,
+                     terminate, inherit, resource-event, admit, digest.
+                     There is no `pmc train`: training is the Rust
+                     examples in crates/pmc-train/examples/
 crates/pmc-core/     Rust: tensors and training primitives, no ML dependencies
+crates/pmc-gguf/     Rust: the GGUF reader and writer
+crates/pmc-token/    Rust: the tokenizer and its special-token handling
 crates/pmc-train/    Rust: trainer, dream consolidation, GGUF export, and the
                      PMC state encoder (`src/pmc_state.rs`)
 crates/pmc-ffi/      Rust: C ABI for the Python side
+crates/pmc-cli/      Rust: the `fuse` binary the Python CLI is a facade over
 crates/pmc-discovery/ Rust: latent state discovery, metadata-only output
+crates/pmc-consciousness/ Rust: indicator harnesses
 bench/                measurement harnesses: hidden-state probes, the
                       substrate swap bench, the cross-host diagnostic, the
                       dream reference check
@@ -318,8 +333,12 @@ Honest, and stated up front:
   in [`docs/claims.md`](docs/claims.md).
 - Resource acquisition requires an explicit budget and is logged. Undeclared
   acquisition is a compliance failure and is visible in `pmc audit`.
-- The default profile ships without survival-drive behaviour. The sandbox
-  profile is experimental and documented separately.
+- The default profile (`dignity`) ships without survival-drive behaviour. The
+  other profile, `autonomous`, is the research profile: opt-in, never the
+  default, and what it grants is stated in
+  [its own section](#two-profiles-and-which-one-the-claims-are-about). There is
+  no third profile. An earlier draft of this file referred to a "sandbox
+  profile"; no such profile exists in the code, and the name is gone.
 
 ## Status
 
@@ -383,9 +402,15 @@ What exists and is tested:
   finite differences over every parameter group, a `PMCV`/`PMCW` binary
   round-trip with a payload digest that refuses a corrupted file and a
   mismatched architecture, seed determinism, held-out cross-validation folds,
-  and a synthetic two-host alignment test; the trainer itself and the
-  cross-host cross-validation gate over the real cues are the next step, not
-  done;
+  and a synthetic two-host alignment test;
+- the cross-host cross-validation gate on the real cues, and it closed
+  **negative** on 2026-10-28: trained on the 30 training facts' four views
+  (120 views, 706,112 parameters, architecture `p128h256l2k64`, seed 20261031,
+  300 epochs), it fits every in-sample view (30/30, loss 0.786 to 0.0014) and
+  then retrieves **11 of 30** held-out cross-host questions across six folds
+  (2, 4, 0, 1, 3, 1), against a pre-registered floor of 15 and no empty fold.
+  The frozen v1-v3 mechanism on the identical folds retrieves 2. See
+  [`docs/lab.md`](docs/lab.md#the-v4-mechanism-pre-registered-2026-10-27);
 - a 50.4M reference core checkpoint (12 layers, `d_model=512`) trained on a
   fixed 48-token sequence: 200 steps, loss 5.887041 to 0.000008, 47/47
   next-token positions at load, checkpoint digest `10ab040e…`, 201,574,436
@@ -401,10 +426,10 @@ What exists and is tested:
 
 What does **not** exist yet:
 
-- the cross-host cross-validation gate on the real cues: the encoder is built
-  and self-tested, but it has not been trained on extracted hidden states and
-  the pre-registered gate (new mechanism ≥ frozen v1–v3 and ≥ 15/30 with no
-  0/5 fold) has not been run;
+- a positive Substrate Swap Test: the cross-host gate is run and closed
+  negative (11/30 against a floor of 15, with one empty fold; the frozen
+  v1-v3 baseline on the same folds is 2/30), so a weight-resident state has not
+  been shown to survive a substrate swap;
 - a trained checkpoint with published weights;
 - a trained 50–100M state-memory bank fused into a GGUF and consumed by the
   live engine: the `pmc.state.memory.*` readout is tested with a synthetic bank

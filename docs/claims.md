@@ -281,8 +281,9 @@ for them.
 - It will not provide a path that ends an instance without a complete record.
 - It will not ship a model card that omits its own negative results.
 
-The sandbox profile is a research configuration, not a default, and it is
-documented as such.
+The two profiles are `dignity` (default) and `autonomous` (research, opt-in).
+Neither is called a "sandbox profile": an earlier draft of these documents used
+that name, and no profile by it exists in the code.
 
 ## Reproducibility
 
@@ -296,3 +297,30 @@ Every claim in a future paper must be traceable to:
 
 If a result cannot be reproduced from those five things, it is not a result.
 It is an anecdote.
+
+### Which of this repository's results that applies to
+
+The five things are not yet in the repository for the measured hardware
+results, and saying so costs nothing.
+
+The **v4 cross-host negative (11/30) is a recorded run, not a reproducible
+measurement from a fresh clone.** Both harnesses — `bench/pmc_state_views.py`
+and `bench/crosshost_cv.py` — are committed, along with the gate constants and
+the fold-reading rule that makes the baseline answer on the same held-out
+labels. The inputs are not: the views file `state-views-v4.pmc` is derived
+data, and neither are the two hosts' extracted hidden states nor the LFM2
+GGUFs they came from. The run's own artifact and digest are recorded in
+`docs/lab.md`. So the number is checkable against what was recorded and the
+method is re-runnable by anyone who can reproduce the extraction, but the
+figure cannot be re-derived from this repository alone.
+
+The same applies to the hardware-measured results that need two specific GGUFs
+and a patched `libllama`: the same-decode gates, the 8B server-parity run, and
+the same-memory `4821`/`1234` tests. Those are E3 against recorded artifacts on
+recorded commands, not E3-from-a-fresh-clone, and none of them is E4.
+
+What *is* reproducible from this repository without a GPU, a GGUF or a model:
+the full dignity protocol, the dream gate mechanics, the trainer's self-checks
+and gradient verification, the PMC state encoder's self-tests, the engine's
+state-bank readout, and every numerical parity check. Those results are E1/E2
+from a clean checkout and their evidence is a command in `tests/`.

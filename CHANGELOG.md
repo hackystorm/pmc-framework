@@ -6,6 +6,100 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+**Seven documentation and wiring defects** (`README.md`, `docs/lab.md`,
+`docs/claims.md`, `MODEL_CARD.md`, `SECURITY.md`, `configs/runtime_default.json`,
+`.github/workflows/ci.yml`, `src/pmc/runtime/judge.py`,
+`crates/pmc-cli/Cargo.toml`, `src/pmc/cli.py`)
+
+- **The Status section contradicted the opening.** It still described the v4
+  cross-host gate as "not yet run" and the encoder as needing training on
+  extracted hidden states, 400 lines below a README that opened with the
+  measured 11/30 negative. The README's "What exists" and "What does **not**
+  exist yet" lists and the `WP5b` row in `docs/lab.md` now all record the same
+  run: 11/30 held-out, folds 2/4/0/1/3/1, floor 15, frozen v1-v3 baseline
+  2/30, empty fold failing on its own clause.
+- **The pre-registration date was later than the result it pre-registered.**
+  The heading read `pre-registered 2026-10-31` above `Result (2026-10-28)`.
+  Git history shows the original heading carried a second date,
+  `2026-10-31, 2026-10-27 dated cues`, and the qualifier was dropped when the
+  result was published (`22d02a6`) without correcting the date. The heading is
+  restored to 2026-10-27, and the correction is recorded in `docs/lab.md`
+  rather than made silently. The seed `20261031` is untouched: it is a
+  recorded parameter of the run, not a date claim.
+- **`pmc train` did not exist and was advertised.** The README's inference-path
+  diagram and repository layout listed a command the CLI does not have. Both
+  now name the real entry points: the Rust examples under
+  `crates/pmc-train/examples/` for training, `pmc fuse` for fusion, and the
+  correction that the Python CLI shells out to a `--trainer` command rather
+  than owning one. The layout also gained the four crates that were missing.
+- **A "sandbox profile" was described that does not exist in the code.** The
+  Safety posture in the README, `docs/claims.md`, `SECURITY.md` and
+  `configs/runtime_default.json` all referred to one; the code ships exactly
+  two profiles, `dignity` (default) and `autonomous` (research, opt-in). All
+  four now name the real profile and say the old name was never real.
+- **CI ran against a branch that does not exist.** `.github/workflows/ci.yml`
+  triggered on `main`; the only branch is `master`, so no push that mattered
+  ran the suite. `SECURITY.md` said fixes land on `main` and is corrected too.
+- **`src/pmc/runtime/judge.py` did not import.** It imported
+  `ProviderResourceBudget`, which does not exist in `providers.py`, and a
+  `pmc.dignity.taint_ledger` module that does not exist. It is now wired to
+  the real provider API, the taint ledger is typed as the single-method
+  protocol it actually needs (the same collaborator `ExternalCall` already
+  marks), and the verdict's `confidence` is carried on `JudgeResult` instead of
+  being folded away — it is what the evidence level is derived from, so a
+  reader could not audit why a verdict earned the level it did. 17 tests
+  (`tests/test_judge.py`) run it, so a module that fails to import now fails
+  the suite.
+- **The Rust binary was named `pmc`, the same as the Python console script.**
+  Two different commands with one name meant `pmc fuse` could resolve its own
+  facade and re-enter itself, and `pmc train` resolved to one binary and not
+  the other, so the README's diagram was wrong and the Rust command was
+  unreachable through the Python name. The binary is renamed `pmc-rust`
+  (`crates/pmc-cli/Cargo.toml`), the Python resolver looks for that name and
+  never for `pmc`, and the docstring records the recursion this ends. Five
+  regression tests (`tests/test_cli_resolution.py`).
+
+**The reproducibility boundary, stated** (`docs/lab.md`, `docs/claims.md`)
+
+- The v4 cross-host negative is labelled for what it is: a **recorded run that
+  a fresh clone cannot re-derive**. Both harnesses and the gate constants are
+  committed; the views file, the two hosts' extracted hidden states and the
+  LFM2 GGUFs are not. The docs now say which, give the ordered reproduction
+  path, and file the result as E3-recorded rather than E3-reruns. The hardware
+  results needing two specific GGUFs and a patched `libllama` are given the
+  same treatment; what *is* reproducible from a clean checkout without a GPU
+  or a model is listed explicitly.
+
+**The publish gate had two blind spots** (`scripts/publish_checks.py`)
+
+- It checked personal-data fragments as chunk prefixes, so a home directory
+  assigned to a keyword argument — the ordinary way one leaks, and on Windows
+  the form the list did not cover at all — never matched. Path fragments are
+  now matched as substrings, and both separators are listed. Name fragments
+  keep prefix matching, because the session-identifier prefix also begins the
+  ordinary plural identifier this repository uses everywhere by design.
+- `del` was in the Italian word list, so any file with a Python delete
+  statement failed the gate on a statement in good English. Removed, per the
+  file's own stated rule that a false positive is worse than a miss.
+- Machine-local binaries are refused by suffix. A Windows shortcut encodes an
+  absolute path to one machine's filesystem, and no text check can read one, so
+  it needs a suffix rule rather than a literal-fragment rule.
+- The gate's exemptions are now covered by a test that requires each exempt
+  path to exist and to be a test or a BYOK module, so an exemption cannot be
+  added quietly. 16 tests (`tests/test_publish_checks.py`).
+
+**The Rust/Python parity suite was skipping silently**
+(`tests/test_rust_parity.py`)
+
+- Its only guard was `shutil.which("cargo")`. On a Windows checkout cargo lives
+  in `%USERPROFILE%\.cargo\bin` and is not on `PATH` for every shell, so six
+  parity tests skipped while cargo was installed and working. `resolve_cargo()`
+  checks the rustup home as well, and the tests now run: 6 passed. The suite
+  goes from 455 passed/8 skipped to 482 passed/2 skipped, and the 2 that remain
+  are Windows symlink-privilege limits, not silent failures.
+
 ### Added
 
 **M5a: SPIN scaffolding** (`crates/pmc-train/src/ops.rs`, `crates/pmc-train/examples/train_spin.rs`)

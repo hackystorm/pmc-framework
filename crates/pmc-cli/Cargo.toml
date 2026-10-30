@@ -5,14 +5,18 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "Single binary for training, discovery and export."
+description = "Standalone binary for training, discovery and export."
 
 [lib]
 name = "pmc_cli"
 path = "src/lib.rs"
 
 [[bin]]
-name = "pmc"
+# `pmc-rust`, not `pmc`: the Python package installs a console script also
+# called `pmc`, and two different commands with one name is a bug, not a
+# convenience. The one a user types interactively is the Python CLI; this one
+# is the no-Python, no-install path.
+name = "pmc-rust"
 path = "src/main.rs"
 
 [dependencies]

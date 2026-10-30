@@ -281,7 +281,7 @@ PYTHONPATH=src:bench python3 bench/substrate_swap.py fuse \
     --host 350m --spec bench/swap_words_v3.json \
     --base /path/to/LFM2.5-350M.gguf --adapters adapters-v3.json \
     --out fused-350m.gguf --rows rows-350m.bin --meta meta-350m.json \
-    --pmc crates/target/release/pmc
+    --pmc crates/target/release/pmc-rust
 # Repeat fuse with --host 8b and the 8B base and output.
 
 PYTHONPATH=src:bench python3 bench/substrate_swap.py eval \

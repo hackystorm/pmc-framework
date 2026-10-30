@@ -52,10 +52,14 @@ SKIP_DIRECTORIES = {
 # Italian function words, checked as whole words. Words that also exist in
 # English ("come", "solo", "ante") are deliberately absent, because a false
 # positive in a publish gate is worse than a missed one.
+#
+# "del" was removed from the list for the same reason: it is Italian for "of
+# the" and also the Python delete statement, so any file that removed a
+# dictionary entry failed the gate on a statement in good English.
 ITALIAN_WORDS = frozenset(
     {
         "anche", "chi", "della", "delle", "dello", "degli",
-        "dei", "del", "dentro", "dopo", "dove", "dunque", "ecco", "essere",
+        "dei", "dentro", "dopo", "dove", "dunque", "ecco", "essere",
         "fare", "fatto", "fatta", "fuori", "già", "giorno", "hanno",
         "insieme", "mai", "mente", "molto", "nella", "nelle", "nello",
         "negli", "nei", "nel", "nulla", "ogni", "oppure", "perché", "percio",
@@ -74,11 +78,28 @@ ALLOWED_NON_ASCII = frozenset(
     "▲▼◀▶△▽◁▷"
 )
 
-# Literal fragments that must never appear in a public repository.
-FORBIDDEN_FRAGMENTS = (
+# Literal fragments that must never appear in a public repository, matched
+# anywhere inside a chunk. These are path fragments: each contains a separator,
+# so it cannot occur inside an ordinary identifier, and a home directory always
+# arrives embedded in one ("workspace=r\"C:\\Users\\...\""), which a prefix test
+# misses. Both separators are listed because a POSIX-only list silently passes
+# Windows paths, and Windows is one of the two CI platforms here.
+FORBIDDEN_PATH_FRAGMENTS = (
     "/home/",
     "/root/",
     "/Users/",
+    "\\home\\",
+    "\\root\\",
+    "\\Users\\",
+    "C:\\Users\\",
+)
+
+# Private names and identifiers, matched as a chunk prefix only. A substring
+# test would over-match: "ses_" is the session-id prefix and it also begins
+# "sessions_", which this repository uses everywhere by design. The rule is the
+# one the English check already states: a false positive in a publish gate is
+# worse than a missed one.
+FORBIDDEN_NAME_FRAGMENTS = (
     "ses_",
     "darkyeye",
     "dualbrain",
@@ -87,6 +108,11 @@ FORBIDDEN_FRAGMENTS = (
 
 # Whole words that must never appear in a public repository.
 FORBIDDEN_WORDS = frozenset({"ALe", "Ellydi", "Ellidi", "EllidiAgent"})
+
+# Machine-local binary formats. They hold absolute paths to one machine's
+# filesystem by construction, and no text check can read them, so they need a
+# suffix rule rather than a literal-fragment rule.
+STRAY_BINARY_SUFFIXES = frozenset({".lnk", ".url", ".exe", ".dll", ".pdb", ".so", ".dylib"})
 
 # Literal blocks that indicate a leaked private key.
 SECRET_BLOCKS = (
@@ -136,7 +162,23 @@ CREDENTIAL_WORDS = (
 
 # Files that are allowed to contain the forbidden fragments, because they
 # are the tests that enforce the rule and therefore have to name it.
-PERSONAL_CHECK_EXEMPT = frozenset({"tests/test_companion.py"})
+PERSONAL_CHECK_EXEMPT = frozenset(
+    {
+        "tests/test_companion.py",
+        "tests/test_publish_checks.py",
+    }
+)
+
+# The same rule for the English check. A test that asserts the Italian detector
+# still fires has to name an Italian word, so without an exemption the gate
+# forbids the tests that prove it works. The exemption is listed here, next to
+# the fragment list, so it cannot be added quietly.
+ENGLISH_CHECK_EXEMPT = frozenset(
+    {
+        "tests/test_companion.py",
+        "tests/test_publish_checks.py",
+    }
+)
 
 # Files that legitimately reference credential field names (api_key and
 # friends) because they implement or test the BYOK layer. They read keys
@@ -213,6 +255,8 @@ def check_english(files: list[Path]) -> list[str]:
     findings: list[str] = []
 
     for path in files:
+        if relative(path) in ENGLISH_CHECK_EXEMPT:
+            continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), start=1):
             for character in line:
@@ -242,14 +286,27 @@ def check_personal_data(files: list[Path]) -> list[str]:
         text = path.read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), start=1):
             for chunk in chunks(line):
-                for fragment in FORBIDDEN_FRAGMENTS:
-                    if chunk.lower().startswith(fragment.lower()):
+                lowered = chunk.lower()
+                for fragment in FORBIDDEN_PATH_FRAGMENTS:
+                    # A path fragment is checked as a substring: it contains a
+                    # separator, so it cannot hide inside an identifier, and the
+                    # leaking form is an assignment rather than a bare path.
+                    if fragment.lower() in lowered:
                         findings.append(
-                            f"{relative(path)}:{number}: forbidden fragment {fragment!r}"
+                            f"{relative(path)}:{number}: forbidden path fragment {fragment!r}"
                         )
                         break
                 else:
-                    continue
+                    for fragment in FORBIDDEN_NAME_FRAGMENTS:
+                        # A name fragment is checked as a prefix, because a
+                        # substring would match ordinary identifiers.
+                        if lowered.startswith(fragment.lower()):
+                            findings.append(
+                                f"{relative(path)}:{number}: forbidden identifier {fragment!r}"
+                            )
+                            break
+                    else:
+                        continue
                 break
 
             for word in tokenize(line):
@@ -350,6 +407,19 @@ def check_stray_files(files: list[Path]) -> list[str]:
     for path in REPO_ROOT.iterdir():
         if path.is_file() and path.suffix in {".jsonl", ".head"}:
             findings.append(f"{relative(path)}: stray runtime file in the repository root")
+    # Machine-local binaries, walked rather than taken from ``files``: the text
+    # checks only collect readable suffixes, so a .lnk never reaches this list
+    # and a check placed there could not fire. A .lnk encodes an absolute path
+    # to one machine's filesystem, which is personal data by construction.
+    for path in sorted(REPO_ROOT.rglob("*")):
+        if not path.is_file():
+            continue
+        if any(part in SKIP_DIRECTORIES for part in path.parts):
+            continue
+        if path.suffix.lower() in STRAY_BINARY_SUFFIXES:
+            findings.append(
+                f"{relative(path)}: machine-local binary ({path.suffix}) cannot be in a public repository"
+            )
     return findings
 
 

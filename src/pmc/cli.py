@@ -355,12 +355,18 @@ def _make_runtime(args: argparse.Namespace, instance_id: str):
 
 
 def _resolve_pmc_cli(explicit: str | None) -> str:
-    """Locate the Rust ``pmc`` binary.
+    """Locate the Rust ``pmc-rust`` binary.
 
     The order is explicit flag, ``PMC_CLI``, the Cargo target directories in
     this checkout, then ``PATH``. The Python CLI is a facade: fusion itself is
     the Rust implementation, so the two entry points share one code path and
     one manifest format.
+
+    The binary is ``pmc-rust`` and not ``pmc`` on purpose. The Python package
+    installs a console script named ``pmc``, so resolving to ``pmc`` on
+    ``PATH`` would find *this* CLI and re-enter ``pmc fuse`` forever. The
+    distinct name ends that ambiguity: ``pmc fuse`` is always the Python
+    entry point, and ``pmc-rust fuse`` the Rust one.
     """
     if explicit:
         return explicit
@@ -369,24 +375,18 @@ def _resolve_pmc_cli(explicit: str | None) -> str:
         return from_env
 
     repository = Path(__file__).resolve().parents[2]
-    for candidate in (
-        repository / "crates" / "target" / "release" / "pmc",
-        repository / "crates" / "target" / "release" / "pmc.exe",
-        repository / "crates" / "target" / "debug" / "pmc",
-        repository / "crates" / "target" / "debug" / "pmc.exe",
-        repository / "target" / "release" / "pmc",
-        repository / "target" / "release" / "pmc.exe",
-        repository / "target" / "debug" / "pmc",
-        repository / "target" / "debug" / "pmc.exe",
-    ):
-        if candidate.is_file():
-            return str(candidate)
+    for directory in ("crates", "."):
+        for profile in ("release", "debug"):
+            for name in ("pmc-rust", "pmc-rust.exe"):
+                candidate = repository / directory / "target" / profile / name
+                if candidate.is_file():
+                    return str(candidate)
 
-    in_path = shutil.which("pmc")
+    in_path = shutil.which("pmc-rust") or shutil.which("pmc-rust.exe")
     if in_path:
         return in_path
     raise FileNotFoundError(
-        "the Rust pmc binary was not found; build it with "
+        "the Rust pmc-rust binary was not found; build it with "
         "'cargo build --release --manifest-path crates/Cargo.toml' "
         "or pass --pmc-cli"
     )
@@ -693,7 +693,7 @@ def build_parser() -> argparse.ArgumentParser:
     fuse.add_argument(
         "--pmc-cli",
         default=None,
-        help="Rust pmc binary (default: PMC_CLI, the checkout target, then PATH)",
+        help="Rust pmc-rust binary (default: PMC_CLI, the checkout target, then PATH)",
     )
     fuse.set_defaults(func=_cmd_fuse)
 

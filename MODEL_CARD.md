@@ -20,8 +20,8 @@
 
 ## Measured results (as of 2026-10-29)
 
-No weights are published, but the following has been measured and is
-reproducible from the repository:
+No weights are published. The following has been measured, and the evidence
+column says how much of it a fresh clone can re-derive:
 
 | Measurement | Value | Level | Command |
 |---|---|---|---|
@@ -30,9 +30,17 @@ reproducible from the repository:
 | Consolidation (3 memories, content) | recall_newer 0.002783 → 0.000086 | E2 | `pmc dream ...` (rolled back) |
 | DPO training (tiny model) | loss 0.693 → 0.00194 | E1 | `cargo run --example train_dpo` |
 | SPIN held-out preference | 0.250 (no improvement) | E1 | `cargo run --example train_spin` |
-| Cross-host gate (v4) | 11/30 (floor 15) | E3 | `bench/crosshost_cv.py` |
-| Substrate Swap (PMC-mini, v1/v2/v3) | host B 1/8, 0/8, 2/8 | E3 | `bench/substrate_swap.py` |
+| Cross-host gate (v4) | 11/30 (floor 15) | E3-recorded | `bench/crosshost_cv.py` |
+| Substrate Swap (PMC-mini, v1/v2/v3) | host B 1/8, 0/8, 2/8 | E3-recorded | `bench/substrate_swap.py` |
 | Tokenizer (pmc-token, LFM2.5) | roundtrip pass | E2 | `PMC_TEST_GGUF=... cargo test -p pmc-token` |
+
+**E3-recorded** means the harness, the gate constants and the command are in
+this repository, and the number is checkable against the recorded artifacts and
+their digests — but the inputs are not. `bench/crosshost_cv.py` needs the views
+file and both hosts' extracted hidden states, which are derived data, and the
+extractions need the two LFM2 GGUFs. So this row is a recorded run, not a
+measurement a fresh clone reproduces. See
+[`docs/claims.md`](docs/claims.md#which-of-this-repositorys-results-that-applies-to).
 
 Negative results are published with the same care as positives. See
 [`docs/lab.md`](docs/lab.md) and [`docs/claims.md`](docs/claims.md).

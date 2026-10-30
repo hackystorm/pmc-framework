@@ -419,7 +419,7 @@ real staging/copy/digest path and the real journal. It is not a six-metric
 memory result: the harness supplies the metric values and the identity
 candidate learns nothing.
 
-### The v4 mechanism (pre-registered 2026-10-31)
+### The v4 mechanism (pre-registered 2026-10-27)
 
 The three negatives above share one cause, measured by the cross-host
 diagnostic (training-only, not an evaluation): on the v3 cue-delta vectors the
@@ -461,16 +461,51 @@ vector exactly, so this is not an optimisation failure: it fits the cues it was
 given and still cannot align the two substrates for a cue it has not seen. The
 empty fold fails the gate on its own clause.
 
-Artifacts, recorded so the negative can be re-run: the views file
-`state-views-v4.pmc` (739,212 bytes, SHA-256
-`7a082ecdb371c57e34c0010ffc1e56a87763ec97a301869dba127586f435f55a`) built by
-`bench/pmc_state_views.py` from the 30 training cues only, the trainer report
-from `crates/pmc-train/examples/train_pmc_state.rs`, and the baseline and
+Artifacts, and what they are worth: the views file `state-views-v4.pmc`
+(739,212 bytes, SHA-256
+`7a082ecdb371c57e34c0010ffc1e56a87763ec97a301869dba127586f435f55a`), built by
+`bench/pmc_state_views.py` from the 30 training cues only; the trainer report
+from `crates/pmc-train/examples/train_pmc_state.rs`; the baseline and the
 verdict from `bench/crosshost_cv.py`.
+
+**The two harnesses are in this repository and the inputs are not.** The views
+file is not committed: it is derived data, and neither are the extracted
+hidden states it is built from (`pmc-swap-hidden/1` JSON per host) nor the two
+LFM2 GGUFs those extractions came from. So the 11/30 above is a **recorded
+run that a fresh clone cannot re-derive**, and it is labelled that way rather
+than as a reproducible measurement. The code path, the gate constants
+(`GATE_MIN_CROSS_HOST = 15`, `GATE_MIN_MARGIN = 0`,
+`GATE_FORBIDS_EMPTY_FOLDS = True`) and the command lines are all in the
+repository, so the *method* is auditable and re-runnable; the *number* is
+checkable only against the recorded artifacts and their digests.
+
+To reproduce it from outside would require, in order: both LFM2 substrates
+fused with their v1-v3 adapters as `bench/substrate_swap.py` describes; a
+hidden-state extraction per host; `bench/pmc_state_views.py` to build the
+views file; the trainer; then `bench/crosshost_cv.py`, which reads its folds
+from the trainer's report so the baseline is scored on the same held-out
+labels. The run is only reproducible end to end from an extraction the size of
+the originals — which is the honest boundary, and it is why this result is
+filed as E3-recorded rather than E3-reruns and not E4.
 
 Per the pre-registration, the failure is recorded and the line pivots to the
 50M core as a task learner. The evaluation cues and the control questions were
 never read by the gate: they stay untouched for the attempt that would follow.
+
+**A correction, recorded rather than silently edited.** The heading of this
+section read `pre-registered 2026-10-31` from its first
+commit (`30ed681`, 2026-10-27), which predates the run. That date is later
+than the `Result (2026-10-28)` line directly below it, so the heading claimed a
+pre-registration dated after the measurement it pre-registered, and 2026-10-31
+had not arrived when the run was published (`22d02a6`, 2026-10-28).
+
+The original heading was `pre-registered 2026-10-31, 2026-10-27 dated cues`;
+the qualifier that carried the actual date was dropped when the result was
+published. The pre-registration, the folds, the key pool and the floor were
+written down on 2026-10-27, before any extraction, which is what the run
+commit's own message states. The heading is corrected to that date. The seed
+`20261031` is untouched: it is a recorded parameter of the run, not a date
+claim, and nothing recorded about the measurement itself has been edited.
 
 ## LM text path (M1, 2026-10-29)
 
@@ -833,7 +868,7 @@ level is a bug.
 | WP5 | four conditions, continuity benchmark, swap test, novel-state test | E3 numbers for every condition, misses included |
 | WP9 | hidden-state channel | `src/pmc/state_channel.py` HiddenSource plus `bench/hidden_channel.py`, measured on the real 350M and 8B extractions: four bounded aggregates, nothing vector-shaped kept, a vector and its reverse give the same token, and a fixed reference of 64 saturates 84 of 84 energy readings on the 350M against 0 at the declared reference. What it gives up is documented: it sees how big a state is and how that changed, not the direction |
 | WP8 | life-criteria battery: homeostasis, continuity, reproduction, boundaries, response | the battery is built and each criterion has a null model that fails (`tests/test_life_criteria.py`); run against a real workspace by `bench/life_criteria.py`. Measured today on an autonomous workspace: homeostasis passes with a real margin (18 of 18 derived-channel readings inside the declared 0.75 band against a null of 0.833), continuity and boundaries pass, reproduction passes trivially with no descendants, and response passes with a margin of +1.000 when the world moves and the rhythm answers it with a consolidation proposal, so the battery reaches E2 for the first time, and it reaches it because of something measured. Two zero margins were removed on the way: the homeostasis band, which was as wide as the channel's own bounds so nothing could leave it, and the welfare flag, which repeated every cycle until it was made to fire only on a change. The channel (`src/pmc/state_channel.py`) is bounded, deterministic, has no string field by type, and no module in `pmc.dignity` imports it |
-| WP5b | v4 mechanism: trainable per-host projection, shared residual body, L2 key | the Rust trainer is built and self-verified (10 checks: gradients vs finite differences, `PMCV`/`PMCW` round-trip with a payload digest, seed determinism, held-out folds, synthetic two-host alignment); the pre-registered cross-host gate over the 30 training cues is **not yet run**; see the v4 note above |
+| WP5b | v4 mechanism: trainable per-host projection, shared residual body, L2 key | the Rust trainer is built and self-verified (10 checks: gradients vs finite differences, `PMCV`/`PMCW` round-trip with a payload digest, seed determinism, held-out folds, synthetic two-host alignment); the pre-registered cross-host gate over the 30 training cues **ran on 2026-10-28 and closed negative**: 11/30 held-out against a floor of 15, folds 2, 4, 0, 1, 3, 1, and the frozen v1–v3 baseline is 2/30 on the same folds; see the v4 note above |
 | WP7a | live runtime spike: libllama, hidden state + logits, logit bias | control passes same-decode; stock LFM2.5 returns zero logits (negative); `patches/` makes the 350M and 8B same-decode pass; paired fallback is not same-decode |
 | WP7 | live runtime: fast weights, state, delta persistence, state-memory bank, OpenAI-compatible API | engine and server measured on the 8B; templated prompt parity with a frozen `llama-server --jinja` run (25 tokens, same text); same-memory E3: frozen `4821`, control `1234`, live `1234` at lr 0.01, 2.0 and 2.0 + prompt learning (negative); KV restore E3: echo run 46-token / 861,339-byte state, 23 of 69 prompt tokens decoded, `4821`; echo-free control 40-token / 787,539-byte state, first reply `Noted.` with no code, 40 restored and 23 of 63 decoded, `4821`; replay of all 63 tokens `4821`, frozen `4821`, no-memory `1234`; new-process restart 40 restored / 23 decoded with the same live-delta hidden-state digest; 8B state offered to the 350M engine refused on identity (`matches=false`) before the C API; positive result is runtime context state, not weight-resident; state-memory bank E1: nine synthetic checks drive the real engine path, with the bank the stored token wins and without it the base token; malformed banks refused; PMC-mini Substrate Swap Test negative on host B in all three runs (v1 5/8 vs 1/8; v2 8/8 vs 0/8; v3 8/8 vs 2/8, host-A control 3/8; all pass false) |
 | WP6 | README, claims, charter mechanisms | no claim above its evidence level |

@@ -26,6 +26,23 @@ sidecar/
 audit/
 backups/
 
+# Local scratch: ad-hoc smoke tests, captured output and logs from a session.
+# These are regenerable debris, never deliverables, and they must not reach a
+# publish gate. The real tests live in tests/ and bench/*_test.py.
+/test_*.py
+/test_*.bat
+/test_*.txt
+/test_*.json
+/test_ckpt*/
+daemon.log
+*_daemon.log
+
+# Machine-local shortcuts and workspaces. A .lnk holds an absolute path to one
+# machine's filesystem, which is exactly the personal data the publish gate
+# exists to keep out.
+*.lnk
+Frenesis_Workspace/
+
 # Editors and operating systems
 .DS_Store
 .idea/

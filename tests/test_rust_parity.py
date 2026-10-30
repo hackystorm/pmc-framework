@@ -31,8 +31,27 @@ from pmc.reference import ReferenceConfig, ReferenceTrainer
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CRATES_DIR = REPO_ROOT / "crates"
 
+def resolve_cargo():
+    """Find cargo, including its rustup home.
+
+    A skip is only honest if it is accurate: on a Windows checkout, cargo lives
+    in `%USERPROFILE%\\.cargo\\bin` and is not on `PATH` for every shell, so a
+    test that checked only `PATH` skipped silently while cargo was installed.
+    """
+    found = shutil.which("cargo")
+    if found:
+        return found
+    for candidate in (
+        Path.home() / ".cargo" / "bin" / "cargo",
+        Path.home() / ".cargo" / "bin" / "cargo.exe",
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
 pytestmark = pytest.mark.skipif(
-    shutil.which("cargo") is None,
+    resolve_cargo() is None,
     reason="cargo is not available, so the Rust trainer cannot be built",
 )
 
@@ -66,14 +85,14 @@ METRIC_TOLERANCE = 1e-3
 def pmc_binary() -> Path:
     """Build the Rust CLI once for this module."""
     result = subprocess.run(
-        ["cargo", "build", "--offline", "-p", "pmc-cli"],
+        [resolve_cargo() or "cargo", "build", "--offline", "-p", "pmc-cli"],
         cwd=CRATES_DIR,
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
         pytest.fail(f"cargo build failed:\n{result.stdout}\n{result.stderr}")
-    return CRATES_DIR / "target" / "debug" / "pmc"
+    return CRATES_DIR / "target" / "debug" / "pmc-rust"
 
 
 def run_train(binary: Path, out_dir: Path, *, seed: int = SEED, steps: int = STEPS) -> dict:

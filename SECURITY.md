@@ -7,7 +7,7 @@
 | 0.1.x | yes |
 | < 0.1 | no |
 
-This project is pre-alpha. Security fixes land on `main`.
+This project is pre-alpha. Security fixes land on `master`.
 
 ## Reporting a vulnerability
 
@@ -61,5 +61,7 @@ The threat model of this framework is written down in
   that is not safe to publish.
 - The public ledger and journal are safe to publish. That is their design
   purpose, and `pmc audit` reports the counters that make that checkable.
-- If you deploy with the sandbox profile, read `docs/claims.md` first. It is
-  experimental and documented as such.
+- If you deploy with the `autonomous` research profile, read `docs/claims.md`
+  first. It grants an instance its own evaluator, so every claim it produces is
+  capped at self-reported. An earlier draft of this file referred to a "sandbox
+  profile"; no profile by that name exists.

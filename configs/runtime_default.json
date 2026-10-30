@@ -49,7 +49,7 @@
 
   "notes": [
     "This profile is data, not code: it is meant to be readable and auditable by the owner.",
-    "The sandbox profile is experimental and documented separately. It is not shipped here.",
+    "The autonomous research profile is opt-in and documented separately. It is not shipped here.",
     "Changing a profile is a recorded decision, not a silent edit."
   ]
 }
