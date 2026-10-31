@@ -1065,3 +1065,83 @@ The gate above refuses because the evaluator is synthetic. A committed dream
 needs a real six-metric evaluator - one that measures recall of the
 consolidated memory against the frozen baseline - and that is the next gate,
 not a documentation change.
+
+## A real six-metric evaluator, and the dream it rolled back (M5a, 2026-10-31)
+
+Pre-registration: replace the mechanics evaluator with one that measures
+recall, then run the dream. The gate is the repository's own - unchanged, and
+written down before the run.
+
+`schema: pmc-dream-recall/1`, `mechanism: likelihood-discrimination`.
+
+**What recall means here.** The model is a small byte-level transformer. Asking
+it a question and reading prose back would measure nothing, so recall is
+measured as **likelihood discrimination**: for a held-out memory, does the
+model assign lower loss to that memory's real continuation than to a wrong one
+taken from a different memory? This is the same preference structure the SPIN
+consolidator trains on, deliberately: an evaluator and a trainer that disagree
+about what "better" means produce a gate that measures the wrong thing.
+
+**Why the probe split is derived from content.** The evaluator runs twice, once
+on the baseline and once on the candidate. Comparing them is meaningful only if
+both score the *same* probes, so which set a record belongs to is a deterministic
+function of its own content digest. A split that depended on which records the
+last dream replayed would make the two runs incomparable. The split is a hex
+digit's parity - the digest is a hex *string*, so it is a string's characters
+that are sampled, not raw bytes, which are never set in ASCII hex.
+
+Command (one run, 2026-10-31, original `crates/build/pmc-50m` baseline, five
+memories held privately, 3 replayed, 60 consolidation steps, elapsed 257 s):
+
+```
+pmc dream --workspace <ws> --checkpoint <ck> --evaluator <recall-eval> --spin --limit 4
+```
+
+Raw result, and it is a **rollback**:
+
+| metric | before | after | delta | verdict |
+|---|---|---|---|---|
+| recall_older | 0.0 | 0.0 | 0.0 | ok |
+| recall_newer | 0.33333334 | 0.33333334 | 0.0 | **fails**: `after >= before + 0.001` |
+| interference | 0.0 | 0.0 | 0.0 | ok |
+| calibration | 0.80149758 | 0.78247404 | -0.01902354 | ok (bound 0.78149758) |
+| identity | 1.0 | 1.0 | 0.0 | ok |
+| false_memory | 0.0 | 0.0 | 0.0 | ok |
+
+`outcome: rolled_back`. `reason: the gate failed`, `reasons: ["recall_newer"]`.
+`checkpoint_after == checkpoint_before` (`39904700…`), so the rollback was
+byte-identical. The candidate itself was real and different:
+`candidate_digest 7b10cadf…`, and the consolidator drove its DPO loss from
+0.6931471824645996 to 0.0 over the 60 steps it was given.
+
+Interpretation (E3 for the mechanism, **negative for the claim**): the tooling
+is now a real measurement - the evaluator computes all six metrics from the
+model's own likelihoods, the gate compared a frozen baseline against a
+candidate, and it refused. The claim that SPIN consolidation improves held-out
+recall **does not hold on this configuration**, and it is recorded as a negative
+rather than as a partial pass.
+
+Two things limit what this says, and both are stated rather than hidden:
+
+- **n = 3 held-out probes.** `0.33333334` is one probe of three. A sample that
+  small cannot distinguish an improvement from noise, so "delta 0.0" is
+  "unchanged within noise", not "provably no effect". A real gate needs dozens.
+- **calibration dropped 0.019 against a tolerance of 0.02** - it passed by
+  0.001. That is a metric at the edge of its own bound, not a comfortable pass.
+
+### A correction this run forced
+
+The first draft of the evaluator reported **raw expected calibration error**,
+which is *lower*-is-better, while the gate's documented direction for
+`calibration` is **higher-is-better** ("may drop by at most
+`calibration_drop_max`"). The two disagree, so the metric was inverted: a gate
+meant to catch a worse-calibrated model would have passed it, and one meant to
+notice an improvement would have failed it. The evaluator now reports
+`1 - ECE`, with the inversion done once at the source and documented there.
+
+That correction changes the earlier result recorded in the SPIN section above:
+that dream's `calibration` was 0.008378 before and 0.064864 after as raw ECE,
+which under the corrected direction is 0.9916 -> 0.9351, a drop of 0.0565 that
+**exceeds** the 0.02 tolerance. Measured with the corrected metric, that dream
+would also have rolled back. The `committed` outcome recorded earlier is
+retracted: it was a pass against a metric that pointed the wrong way.
