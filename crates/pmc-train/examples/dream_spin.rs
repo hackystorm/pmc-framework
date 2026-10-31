@@ -201,7 +201,13 @@ mod json_read {
                 return Ok((Value::Object(entries), after));
             }
             loop {
+                // Trim before the key, not only before the comma: the manifest
+                // the dream pipeline writes is `indent=2` pretty-printed JSON, so
+                // a newline and spaces sit between every comma and every key.
+                // Skipping this worked on compact JSON and failed on the real
+                // one, which is how this bug survived its first tests.
                 let quoted = cursor
+                    .trim_start()
                     .strip_prefix('"')
                     .ok_or_else(|| "expected an object key".to_string())?;
                 let (key, after_key) = parse_string(quoted)?;
@@ -334,13 +340,31 @@ fn read_replay_manifest(path: &Path) -> Result<Vec<ReplayedMemory>, String> {
 // Bring the enum into scope for the helper methods above.
 use json_read::Value;
 
+/// The blob path one memory occupies in the private store.
+///
+/// The layout is mirrored from `pmc.dignity.private_store`, and the mirror has
+/// to be exact: the store hashes its *key* with ``sha256_of``, which hashes the
+/// **canonical JSON encoding** of the key rather than the key's raw bytes. For a
+/// string key that means the quoted form, ``"mem_abc123"``, quotes included.
+/// Hashing the raw bytes instead produces a different but well-formed path, so
+/// the store finds no blob and the consolidator reports an empty replay - which
+/// is a silent divergence this port would not otherwise catch, because nothing
+/// on either side is technically wrong.
+fn blob_path(store_root: &Path, record_id: &str) -> PathBuf {
+    // A record id is a bare identifier with no characters JSON escapes, so the
+    // canonical form is simply the quoted string.
+    let mut quoted = String::with_capacity(record_id.len() + 2);
+    quoted.push('"');
+    quoted.push_str(record_id);
+    quoted.push('"');
+    store_root.join(format!("{}.bin", &sha256_hex(quoted.as_bytes())[..32]))
+}
+
 /// Fetch the content of one replayed memory from the private store, checked
 /// against the digest the manifest recorded.
 ///
 /// The consolidator is the only party allowed to read memory content, so it
-/// does the fetching itself rather than receiving it in the manifest. The
-/// store's layout is mirrored from `pmc.dignity.private_store`: the blob path
-/// is `sha256(key)[:32].bin` under `sidecar/private`.
+/// does the fetching itself rather than receiving it in the manifest.
 ///
 /// Returns `None` when the blob is absent or disagrees with the digest, which
 /// is not an error: a memory whose content is gone or changed is a memory that
@@ -349,8 +373,7 @@ use json_read::Value;
 /// the manifest never described would produce a candidate whose dream is
 /// attributable to the wrong memory.
 fn fetch_content(store_root: &Path, memory: &ReplayedMemory) -> Option<Vec<u8>> {
-    let key = sha256_hex(memory.record_id.as_bytes());
-    let blob = store_root.join(format!("{}.bin", &key[..32]));
+    let blob = blob_path(store_root, &memory.record_id);
     if !blob.is_file() {
         return None;
     }

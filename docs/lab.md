@@ -1009,3 +1009,59 @@ The rule is one commit per **verified success**, not per hour of work.
   history can be read as the evidence trail rather than as a diary.
 - The working tree stays clean between successes. An uncommitted change is
   work in progress, and it is called that.
+
+## The full journey, run end to end (M5a, 2026-10-31)
+
+Pre-registration: a new instance is created, taught one memory, and
+consolidated with SPIN - one unbroken path from the framework's CLI, with no
+step performed by hand outside it.
+
+Commands:
+```
+pmc companion create --agent-name "Test" --workspace <ws> --seed 3
+pmc remember --workspace <ws> --text "The gate code is 47-rosso."
+pmc dream --workspace <ws> --checkpoint <ck> --evaluator "<evaluator>" --spin
+```
+
+One run, 2026-10-31, against the real 50.4M reference checkpoint
+(`crates/build/pmc-50m`, 201,574,436 bytes):
+- `remember`: admitted, bytes 43, record `mem_9db0ad28d49c6324`, content
+  present in `sidecar/private`
+- `dream --spin`: `records 1, missing 0, pairs 1, steps 200, beta 0.5`
+- `initial_dpo_loss 0.6931471824645996 -> final_dpo_loss 0.0`
+- `param_count 50393600`, `elapsed_millis 269137`
+- candidate written and **not** byte-identical to the baseline
+  (`ab537c8c...` vs `39904700...`)
+- gate: `passed false`, reason `recall_newer`; `outcome: rolled_back`
+- `checkpoint_after == checkpoint_before`, so the rollback was byte-identical
+
+Interpretation (E1 for the mechanism, E0 for the memory): the path works, and
+the honest result is a rollback. The evaluator used was synthetic - it prints
+fixed six-metric values, so `recall_newer` cannot move and the gate correctly
+refuses. That is the gate doing its job on a measurement that does not exist,
+not a failure of the consolidator.
+
+What this run does prove, and what the unit tests did not: the two
+cross-language bugs below are gone, because a real `pmc remember` put a real
+blob in a real store and the SPIN consolidator found it, read the manifest the
+pipeline actually writes, and trained.
+
+### The two bugs this journey found
+
+- **JSON reading.** The consolidator parsed only compact JSON. The pipeline
+  writes `indent=2` manifests, where a newline and spaces sit between every
+  comma and every key. The parse failed on the real file, not the test fixture.
+- **The blob path.** The store hashes its key with `sha256_of`, which hashes
+  the canonical JSON encoding of the key - the quoted string, quotes included.
+  The port hashed the raw bytes. Both are valid SHA-256, so neither side
+  errors; the store merely holds a file the consolidator does not look for,
+  and the dream reports an empty replay. This is exactly the silent divergence
+  the repository's Rust/Python parity tests exist to catch, and it is now
+  pinned by a test carrying the known-good name from the Python store.
+
+### What remains
+
+The gate above refuses because the evaluator is synthetic. A committed dream
+needs a real six-metric evaluator - one that measures recall of the
+consolidated memory against the frozen baseline - and that is the next gate,
+not a documentation change.

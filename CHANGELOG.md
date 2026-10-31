@@ -8,6 +8,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+**`pmc remember`** (`src/pmc/cli.py`, `tests/test_cli.py`)
+
+The framework's core flow — teach an instance something, then consolidate it
+— had no command. Teaching meant computing a SHA-256 by hand, inventing a
+record id, and storing the content somewhere the framework would never look.
+The framework held the ledger side of the model and the store side of the
+model, but not the path between them that a person could walk.
+
+`pmc remember --text "..."` (or `--text-file`) reads the content, puts it in
+the instance's private store, and admits the record with the digest computed
+from it. The two halves stay separate on purpose: the ledger records *that* a
+memory exists and never sees its content (D-15, D-17), while the bytes go to
+the store the consolidator is authorised to read.
+
+The record id is **derived from the content**, not chosen by the caller, so the
+same content remembered twice is one memory rather than two - which keeps the
+ledger append-only and the audit honest about capacity. Content is read from
+`--text` or `--text-file`, never both; each refusal names what was refused.
+
+Seven tests cover the store side, the ledger side, the derived id, file input,
+idempotency, and the refusal paths.
+
+**Two cross-language defects fixed in the SPIN consolidator**
+(`crates/pmc-train/examples/dream_spin.rs`, `crates/pmc-train/tests/dream_spin.rs`)
+
+The full journey `pmc companion create` → `pmc remember` → `pmc dream --spin`
+was run end to end, and it surfaced two bugs the unit tests had not:
+
+- **JSON reading.** The consolidator's parser accepted only compact JSON, but
+  the dream pipeline writes `indent=2` pretty-printed manifests. A newline and
+  spaces sit between every comma and every key, so the next `strip_prefix('"')`
+  found whitespace and the parse failed. Fixed, and pinned by a test.
+- **The private-store blob path.** The store hashes its key with
+  `sha256_of`, which hashes the **canonical JSON encoding** of the key — for a
+  string, the quoted form, quotes included. The port hashed the raw bytes
+  instead. Both produce a valid SHA-256, so nothing failed on either side; the
+  store simply held no blob the consolidator could find, and the dream reported
+  an empty replay. Pinned by a test carrying the known-good blob name from the
+  Python store, so a future drift in either language fails the build.
+
+The Rust suite is 11 tests, from 10: the blob-path parity test is the new one.
+
+### Added
+
 **SPIN is now the dream cycle's consolidator** (`crates/pmc-train/examples/dream_spin.rs`,
 `crates/pmc-train/tests/dream_spin.rs`, `src/pmc/cli.py`)
 

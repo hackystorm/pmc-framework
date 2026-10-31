@@ -25,6 +25,38 @@ So: a substrate-swappable, weight-resident state has **not** been
 demonstrated here. What follows is what exists without it, and every claim
 below is labelled at the evidence level it earned.
 
+## Start here: one instance, one memory, one dream
+
+Three commands, in order. This is the whole core loop, and it is the fastest
+way to see what the framework does.
+
+```bash
+pip install -e ".[dev]"
+
+# 1. Create an instance. Identity and journal are written to the workspace.
+pmc companion create --agent-name "My Instance" --workspace ./ws
+
+# 2. Teach it something. The content goes to the private store, the digest to
+#    the ledger: the framework never sees the two in the same place.
+pmc remember --workspace ./ws --text "The gate code is 47-rosso. Memory persists."
+
+# 3. Dream. The memories are replayed and consolidated with SPIN - the
+#    instance's own generation is the rejected side, the memory the chosen one.
+#    A gate either commits the candidate or rolls back, byte-identically.
+pmc dream --workspace ./ws --checkpoint ./ck --evaluator "<your-evaluator>" --spin
+```
+
+Commands are grouped by what they are *for*, not by which module they live in:
+`companion`/`remember` for an instance's life, `dream`/`fuse` for the artifacts,
+`audit`/`journal`/`welfare`/`object`/`terminate` for what an operator can see
+and do. `pmc <command> --help` names every option.
+
+The one thing this does **not** show is a *successful* consolidation. Step 3
+needs a real six-metric evaluator; the one in this repository's evidence is
+synthetic, so the gate correctly refuses. See
+[`docs/lab.md`](docs/lab.md#the-full-journey-run-end-to-end-m5a-2026-10-31)
+for what the real run returned and why the honest result was a rollback.
+
 ## Two structural rules, stated before any power
 
 The framework ships two instance profiles: **`dignity`**, the default, and

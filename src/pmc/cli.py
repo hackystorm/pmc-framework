@@ -34,6 +34,8 @@ from .rhythm import (
 from .companion.profile import CompanionProfile
 from .companion.templates import DEFAULT_BOUNDARIES, DEFAULT_CLAIMS, DEFAULT_VALUES
 from .dignity.digestion import DigestStrategy
+from .dignity.private_store import PrivateStore
+from .dignity.records import content_digest as _content_digest_of_payload
 from .dignity.protocol import DignityProtocol
 from .dignity.records import Instance, MemoryRecord, Provenance, ProvenanceKind
 from .dignity.registry import TerminationIntent
@@ -265,6 +267,100 @@ def _cmd_admit(args: argparse.Namespace) -> int:
     )
     outcome = protocol.admit(record, instance_id=args.instance_id)
     _emit({"record_id": record.record_id, "admission": outcome.value}, args.json)
+    return EXIT_OK
+
+
+def _cmd_remember(args: argparse.Namespace) -> int:
+    """Teach an instance something, in one command.
+
+    Reads the content, puts it in the instance's private store, and admits the
+    record with the digest computed from it. The two halves are deliberately
+    separate: the ledger records *that* a memory exists and never sees its
+    content (D-15, D-17), while the bytes travel to the private store, where
+    only the consolidator - the party the dream pipeline authorises - can read
+    them back.
+
+    Doing this in one command is what makes the framework usable. The pieces
+    always existed; what was missing was a path a person could walk.
+    """
+    if args.text is None and args.text_file is None:
+        print(
+            "error: one of --text or --text-file is required: there is nothing to remember",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+    if args.text is not None and args.text_file is not None:
+        print(
+            "error: --text and --text-file are mutually exclusive: name one source of content",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+
+    if args.text is not None:
+        payload = args.text.encode("utf-8")
+    else:
+        path = Path(args.text_file)
+        if not path.is_file():
+            print(f"error: no such file: {path}", file=sys.stderr)
+            return EXIT_INVALID
+        payload = path.read_bytes()
+    if not payload:
+        print("error: the content to remember is empty", file=sys.stderr)
+        return EXIT_INVALID
+
+    digest = _content_digest_of_payload(payload)
+    # The record id is derived from the content, not invented: the same content
+    # admitted twice is the same memory, not two, so a person never has to
+    # choose an id and later discover that a second id for the same content
+    # split one memory in two.
+    record_id = f"mem_{digest[:16]}"
+
+    protocol = DignityProtocol(args.workspace)
+    store = PrivateStore(Path(args.workspace) / "sidecar" / "private")
+    existing = store.digest_of(record_id)
+    if existing is not None and existing != digest:
+        # A collision between two contents at the same id: refuse rather than
+        # overwrite, because the second write would make the store disagree
+        # with the ledger about which memory this record names.
+        print(
+            f"error: {record_id} already names different content in this store",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+    if existing is None:
+        store.put(record_id, payload)
+
+    if any(record.record_id == record_id for record in protocol.records()):
+        # The ledger is append-only: re-admitting the same content is the same
+        # record. Admitting it again would claim a capacity that was never spent
+        # twice, which is exactly what the audit reports on.
+        _emit(
+            {
+                "record_id": record_id,
+                "content_digest": digest,
+                "state": "already_held",
+            },
+            args.json,
+        )
+        return EXIT_OK
+
+    record = MemoryRecord(
+        record_id=record_id,
+        content_digest=digest,
+        provenance=Provenance(kind=ProvenanceKind.OWN),
+        emotional_load=args.load,
+        topics=tuple(args.topic or ()),
+    )
+    outcome = protocol.admit(record, instance_id=args.instance_id)
+    _emit(
+        {
+            "record_id": record_id,
+            "content_digest": digest,
+            "bytes": len(payload),
+            "admission": outcome.value,
+        },
+        args.json,
+    )
     return EXIT_OK
 
 
@@ -705,6 +801,30 @@ def build_parser() -> argparse.ArgumentParser:
         default=ProvenanceKind.OWN.value,
     )
     admit.set_defaults(func=_cmd_admit)
+
+    remember = sub.add_parser(
+        "remember",
+        help="teach the instance something: content to the private store, metadata to the ledger",
+    )
+    remember.add_argument("--workspace", required=True)
+    remember.add_argument(
+        "--text",
+        default=None,
+        help="the content to remember, as text; use --text-file for a file",
+    )
+    remember.add_argument(
+        "--text-file",
+        default=None,
+        help="a file whose bytes are the content to remember",
+    )
+    remember.add_argument("--load", type=float, default=0.3)
+    remember.add_argument("--topic", action="append", default=None)
+    remember.add_argument(
+        "--instance-id",
+        default=None,
+        help="the instance that holds this memory; needed for a later hand-over",
+    )
+    remember.set_defaults(func=_cmd_remember)
 
     digest = sub.add_parser("digest", help="record digestion or refusal of a memory")
     digest.add_argument("--workspace", required=True)

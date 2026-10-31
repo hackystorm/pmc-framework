@@ -166,9 +166,18 @@ impl Workspace {
 
     /// Write a memory into the private store, in the layout
     /// `pmc.dignity.private_store` uses, and return its record id.
+    ///
+    /// The blob path hashes the canonical JSON encoding of the key - the quoted
+    /// string - not the key's raw bytes. Getting this wrong yields a valid but
+    /// empty store, so the test mirrors the Python store exactly rather than
+    /// the Rust module's own assumption.
     fn store_memory(&self, content: &[u8]) -> String {
         let record_id = format!("mem_{}", &sha256_hex(content)[..16]);
-        let key = sha256_hex(record_id.as_bytes());
+        let mut quoted = String::with_capacity(record_id.len() + 2);
+        quoted.push('"');
+        quoted.push_str(&record_id);
+        quoted.push('"');
+        let key = sha256_hex(quoted.as_bytes());
         let mut file = File::create(self.private.join(format!("{}.bin", &key[..32])))
             .expect("create a private store blob");
         file.write_all(content).expect("write a private store blob");
@@ -499,6 +508,32 @@ fn the_same_inputs_produce_the_same_candidate() {
 }
 
 #[test]
+fn the_blob_path_matches_the_python_store_exactly() {
+    // The layout is mirrored across two languages, and a mirrored hash is a
+    // place a port can silently diverge: both sides compute a valid SHA-256, so
+    // nothing fails until a real store yields an empty replay. The expected
+    // name below is what `pmc.dignity.private_store` writes for this record id,
+    // so this test fails if either side drifts.
+    let record_id = "mem_9db0ad28d49c6324";
+    let mut quoted = String::with_capacity(record_id.len() + 2);
+    quoted.push('"');
+    quoted.push_str(record_id);
+    quoted.push('"');
+    let key = sha256_hex(quoted.as_bytes());
+    let blob = PathBuf::from(format!("{}.bin", &key[..32]));
+
+    assert_eq!(
+        blob.file_name().and_then(|name| name.to_str()),
+        Some("04ce181b3676467e16bcacfb761d866a.bin"),
+        "the Rust blob path and the Python private store have diverged"
+    );
+
+    // And the raw-bytes form is *different*, which is the divergence to avoid.
+    let raw = sha256_hex(record_id.as_bytes());
+    assert_ne!(&raw[..32], &key[..32], "raw-bytes hashing would look right");
+}
+
+#[test]
 fn a_checkpoint_written_with_a_step_is_still_readable() {
     let Some((_hold, binary)) = prepared() else {
         eprintln!("skipping: cargo unavailable");
@@ -516,7 +551,11 @@ fn a_checkpoint_written_with_a_step_is_still_readable() {
     fs::create_dir_all(&private).expect("create a private store");
     let content = b"A memory to consolidate after a previous dream. ";
     let record_id = format!("mem_{}", &sha256_hex(content)[..16]);
-    let key = sha256_hex(record_id.as_bytes());
+    let mut quoted = String::with_capacity(record_id.len() + 2);
+    quoted.push('"');
+    quoted.push_str(&record_id);
+    quoted.push('"');
+    let key = sha256_hex(quoted.as_bytes());
     fs::write(
         private.join(format!("{}.bin", &key[..32])),
         content,

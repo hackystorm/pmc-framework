@@ -450,3 +450,185 @@ def test_an_autonomous_instance_runs_a_rhythm(tmp_path, capsys):
     assert payload["instance"] == "inst_001"
     assert payload["report"]["cycles_spent"] == 1
     assert payload["report"]["policy"]["rumination_floor"] > 0
+
+def test_remember_stores_content_and_admits_the_record(capsys, tmp_path):
+    """Teach an instance something in one command.
+
+    Before `remember`, teaching an instance meant computing a SHA-256 by hand,
+    inventing a record id, and then storing the content somewhere the framework
+    would never look. The framework held the ledger side of the model but not
+    the path a person could walk.
+    """
+    workspace = tmp_path / "ws"
+    run(
+        capsys,
+        ["companion", "create", "--agent-name", "R", "--workspace", str(workspace)],
+    )
+
+    code, out, _ = run(
+        capsys,
+        [
+            "--json",
+            "remember",
+            "--workspace",
+            str(workspace),
+            "--text",
+            "The gate code is 47-rosso. Memory persists.",
+            "--topic",
+            "project",
+        ],
+    )
+    assert code == EXIT_OK
+    record_id = json.loads(out)["record_id"]
+
+    # The record exists in the ledger, and the bytes exist in the private store.
+    code, out, _ = run(
+        capsys,
+        ["--json", "instances", "--workspace", str(workspace)],
+    )
+    assert code == EXIT_OK
+
+    # The id is derived from the content, not chosen by the caller.
+    from pmc.dignity.records import content_digest
+
+    expected = content_digest(b"The gate code is 47-rosso. Memory persists.")
+    assert record_id == f"mem_{expected[:16]}"
+
+    # And the content is in the private store, under the store's own path.
+    from pmc.dignity.records import sha256_of
+    from pmc.dignity.private_store import PrivateStore
+
+    store = PrivateStore(workspace / "sidecar" / "private")
+    assert store.digest_of(record_id) == expected
+    assert store.has(record_id)
+
+
+def test_remembering_the_same_content_twice_is_one_memory(capsys, tmp_path):
+    """The ledger is append-only and a record's id is its content.
+
+    Admitting the same content twice is the same record - not a second one -
+    so a person who re-remembers something has not spent capacity the instance
+    does not have.
+    """
+    workspace = tmp_path / "ws"
+    run(
+        capsys,
+        ["companion", "create", "--agent-name", "R", "--workspace", str(workspace)],
+    )
+
+    for _ in range(2):
+        code, out, _ = run(
+            capsys,
+            ["--json", "remember", "--workspace", str(workspace), "--text", "one memory"],
+        )
+        assert code == EXIT_OK
+    assert json.loads(out)["state"] == "already_held"
+
+    from pmc.dignity.protocol import DignityProtocol
+
+    records = [
+        record
+        for record in DignityProtocol(workspace).records()
+        if record.record_id == json.loads(out)["record_id"]
+    ]
+    assert len(records) == 1
+
+
+def test_remember_from_a_file_remembers_the_files_bytes(capsys, tmp_path):
+    workspace = tmp_path / "ws"
+    run(
+        capsys,
+        ["companion", "create", "--agent-name", "R", "--workspace", str(workspace)],
+    )
+    path = tmp_path / "note.txt"
+    path.write_bytes(b"bytes from a file, exactly as written")
+
+    code, out, _ = run(
+        capsys,
+        [
+            "--json",
+            "remember",
+            "--workspace",
+            str(workspace),
+            "--text-file",
+            str(path),
+        ],
+    )
+    assert code == EXIT_OK
+    payload = json.loads(out)
+    assert payload["bytes"] == len(b"bytes from a file, exactly as written")
+
+    from pmc.dignity.private_store import PrivateStore
+
+    store = PrivateStore(workspace / "sidecar" / "private")
+    assert store.get(payload["record_id"]) == b"bytes from a file, exactly as written"
+
+
+def test_remember_refuses_without_content(capsys, tmp_path):
+    """Nothing to remember is a refusal, not an empty record."""
+    workspace = tmp_path / "ws"
+    run(
+        capsys,
+        ["companion", "create", "--agent-name", "R", "--workspace", str(workspace)],
+    )
+
+    code, _, _ = run(
+        capsys,
+        ["--json", "remember", "--workspace", str(workspace)],
+    )
+    assert code == EXIT_INVALID
+
+    code, _, _ = run(
+        capsys,
+        ["--json", "remember", "--workspace", str(workspace), "--text", ""],
+    )
+    assert code == EXIT_INVALID
+
+
+def test_remember_refuses_two_kinds_of_content_at_once(capsys, tmp_path):
+    """`--text` and `--text-file` name different things, so both is a refusal."""
+    workspace = tmp_path / "ws"
+    run(
+        capsys,
+        ["companion", "create", "--agent-name", "R", "--workspace", str(workspace)],
+    )
+    path = tmp_path / "n.txt"
+    path.write_text("a file")
+
+    code, _, err = run(
+        capsys,
+        [
+            "--json",
+            "remember",
+            "--workspace",
+            str(workspace),
+            "--text",
+            "some text",
+            "--text-file",
+            str(path),
+        ],
+    )
+    assert code == EXIT_INVALID
+    assert "mutually exclusive" in err
+
+
+def test_remember_refuses_a_missing_file(capsys, tmp_path):
+    workspace = tmp_path / "ws"
+    run(
+        capsys,
+        ["companion", "create", "--agent-name", "R", "--workspace", str(workspace)],
+    )
+
+    code, _, err = run(
+        capsys,
+        [
+            "--json",
+            "remember",
+            "--workspace",
+            str(workspace),
+            "--text-file",
+            str(tmp_path / "absent.txt"),
+        ],
+    )
+    assert code == EXIT_INVALID
+    assert "no such file" in err
